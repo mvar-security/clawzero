@@ -323,11 +323,6 @@ tests/attack_pack/
 - ClawGuard is Layer 4 (runtime governance)
 - Complementary, not competitive
 
-**MIRRA EOS:**
-- Layer 5 (cognitive architecture)
-- ClawGuard protects agents; MIRRA gives agents memory/identity
-- Different concerns, could integrate
-
 ---
 
 *This roadmap is a living document. Update as implementation progresses.*

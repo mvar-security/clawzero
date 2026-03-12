@@ -137,7 +137,6 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for full implementation plan.
 
 - **MVAR** ([github.com/mvar-security/mvar](https://github.com/mvar-security/mvar)) — The underlying runtime governance layer
 - **OpenClaw** ([github.com/OpenClaw/OpenClaw](https://github.com/OpenClaw/OpenClaw)) — The AI agent framework ClawGuard protects
-- **MIRRA EOS** — The cognitive architecture that originated MVAR's design principles
 
 ---
 
@@ -145,4 +144,4 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for full implementation plan.
 
 Questions? Open an issue or reach out to [@mvar-security](https://github.com/mvar-security).
 
-**License:** Apache 2.0 (not yet applied — placeholder repo only)
+**License:** Apache 2.0
