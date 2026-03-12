@@ -146,5 +146,5 @@ cython_debug/
 .DS_Store
 Thumbs.db
 
-# ClawGuard generated files
+# ClawZero generated files
 examples/witness_output/

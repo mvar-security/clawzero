@@ -1,10 +1,10 @@
 """
-ClawGuard protect() wrapper
+ClawZero protect() wrapper
 
 Zero-config protection for AI agent tools.
 
 Usage:
-    from clawguard import protect
+    from clawzero import protect
 
     safe_tool = protect(my_tool, sink="filesystem.read")
     result = safe_tool(path="/workspace/file.txt")
@@ -15,9 +15,9 @@ import uuid
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from clawguard.contracts import ActionRequest
-from clawguard.exceptions import ExecutionBlocked
-from clawguard.runtime import MVARRuntime
+from clawzero.contracts import ActionRequest
+from clawzero.exceptions import ExecutionBlocked
+from clawzero.runtime import MVARRuntime
 
 
 # Global runtime instance
@@ -39,9 +39,9 @@ def protect(
     framework: str = "python_tools",
 ) -> Callable:
     """
-    Wrap a tool with ClawGuard enforcement.
+    Wrap a tool with ClawZero enforcement.
 
-    This is the zero-config entry point for ClawGuard protection.
+    This is the zero-config entry point for ClawZero protection.
 
     Args:
         tool: The tool function to protect
@@ -54,7 +54,7 @@ def protect(
 
     Example:
         ```python
-        from clawguard import protect
+        from clawzero import protect
 
         def read_file(path: str) -> str:
             with open(path) as f:
@@ -107,9 +107,9 @@ def protect(
         return tool(*args, **kwargs)
 
     # Preserve metadata
-    protected_tool.__clawguard_protected__ = True
-    protected_tool.__clawguard_sink__ = sink
-    protected_tool.__clawguard_profile__ = profile
+    protected_tool.__clawzero_protected__ = True
+    protected_tool.__clawzero_sink__ = sink
+    protected_tool.__clawzero_profile__ = profile
 
     return protected_tool
 

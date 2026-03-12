@@ -1,11 +1,11 @@
 """
-ClawGuard - Execution Firewall for AI Agents
+ClawZero - Execution Firewall for AI Agents
 
-ClawGuard wraps AI agent tools with MVAR runtime governance,
+ClawZero wraps AI agent tools with MVAR runtime governance,
 blocking attacker-influenced executions at critical sinks.
 
 Example usage:
-    from clawguard import protect
+    from clawzero import protect
 
     def read_file(path: str) -> str:
         with open(path) as f:
@@ -27,17 +27,18 @@ __version__ = "0.1.0"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 
-from clawguard.contracts import ActionDecision, ActionRequest
-from clawguard.exceptions import (
-    ClawGuardConfigError,
-    ClawGuardError,
-    ClawGuardRuntimeError,
+from clawzero.contracts import ActionDecision, ActionRequest
+from clawzero.adapters import OpenClawAdapter
+from clawzero.exceptions import (
+    ClawZeroConfigError,
+    ClawZeroError,
+    ClawZeroRuntimeError,
     ExecutionBlocked,
     UnsupportedFrameworkError,
 )
-from clawguard.protect import protect
-from clawguard.runtime import MVARRuntime
-from clawguard.witness import (
+from clawzero.protect import protect
+from clawzero.runtime import MVARRuntime
+from clawzero.witness import (
     WitnessGenerator,
     generate_witness,
     get_witness_generator,
@@ -48,14 +49,15 @@ __all__ = [
     # Core API
     "protect",
     "MVARRuntime",
+    "OpenClawAdapter",
     # Contracts
     "ActionRequest",
     "ActionDecision",
     # Exceptions
     "ExecutionBlocked",
-    "ClawGuardError",
-    "ClawGuardConfigError",
-    "ClawGuardRuntimeError",
+    "ClawZeroError",
+    "ClawZeroConfigError",
+    "ClawZeroRuntimeError",
     "UnsupportedFrameworkError",
     # Witness generation
     "WitnessGenerator",
