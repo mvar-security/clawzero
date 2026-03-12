@@ -214,20 +214,32 @@ class MVARRuntime:
         """
         Check if URL matches domain pattern.
 
-        V0.1: Simple domain extraction + matching. Future: Regex patterns.
+        Extracts hostname from URL (ignoring protocol, port, path) and
+        matches against pattern.
+
+        Args:
+            url: Full URL (e.g., "http://localhost:8080/api")
+            pattern: Domain pattern (e.g., "localhost", "*.example.com", "*")
+
+        Returns:
+            True if hostname matches pattern
         """
-        # Extract domain from URL
         from urllib.parse import urlparse
 
+        # Extract hostname (without port)
         parsed = urlparse(url)
-        domain = parsed.netloc or parsed.path.split('/')[0]
+        hostname = parsed.hostname or url  # fallback to raw url if no scheme
 
-        # Simple pattern matching
+        # Pattern matching
         if pattern == "*":
             return True
 
-        # Exact match or subdomain match
-        return domain == pattern or domain.endswith(f".{pattern}")
+        if pattern.startswith("*."):
+            # Wildcard subdomain: *.example.com matches sub.example.com
+            return hostname.endswith(pattern[1:])
+
+        # Exact hostname match
+        return hostname == pattern
 
     def _generate_reason(
         self,
