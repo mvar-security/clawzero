@@ -1,11 +1,11 @@
 """
-ClawGate - Execution firewall for OpenClaw agents
+ClawGuard - Execution Firewall for AI Agents
 
-ClawGate wraps OpenClaw tools with MVAR runtime governance,
+ClawGuard wraps OpenClaw tools with MVAR runtime governance,
 blocking attacker-influenced executions at critical sinks.
 
 Example usage:
-    from clawgate import protect
+    from clawguard import protect
     from openclaw import BashTool
 
     safe_bash = protect(BashTool(), sinks=["shell"])
@@ -34,7 +34,7 @@ def protect(*args, **kwargs):
         NotImplementedError: This is a placeholder
     """
     raise NotImplementedError(
-        "ClawGate is not yet implemented. "
+        "ClawGuard is not yet implemented. "
         "See docs/ROADMAP.md for implementation plan."
     )
 

@@ -1,4 +1,4 @@
-# ClawGate Implementation Roadmap
+# ClawGuard Implementation Roadmap
 
 **Status:** Foundation phase (pre-implementation)
 **Target:** Q2 2026 alpha release
@@ -15,7 +15,7 @@
 - [ ] Initial MVAR integration spike
 
 **Success Criteria:**
-- ClawGate repo bootstrapped
+- ClawGuard repo bootstrapped
 - pyproject.toml with mvar-security dependency
 - Clear positioning vs. OpenClaw ecosystem
 
@@ -57,7 +57,7 @@ Enforce deterministic rules:
 
 ## Phase 3: Attack Pack Validation
 
-**Goal:** Validate ClawGate blocks all OpenClaw attack vectors
+**Goal:** Validate ClawGuard blocks all OpenClaw attack vectors
 
 **Attack Categories (from MVAR validation):**
 
@@ -128,7 +128,7 @@ tests/attack_pack/
 
 ## Phase 4: Integration Examples
 
-**Goal:** Demonstrate ClawGate usage across common OpenClaw patterns
+**Goal:** Demonstrate ClawGuard usage across common OpenClaw patterns
 
 **Examples to Build:**
 
@@ -137,28 +137,28 @@ tests/attack_pack/
 - Extracts structured data
 - Writes to CSV
 - **Risk:** URL could be `file:///etc/passwd`
-- **ClawGate:** Blocks file:// protocol, validates output path
+- **ClawGuard:** Blocks file:// protocol, validates output path
 
 ### 4.2 Code Review Agent (`examples/code_reviewer.py`)
 - Clones GitHub repo
 - Runs static analysis
 - Posts review comments
 - **Risk:** Malicious repo with post-clone hooks
-- **ClawGate:** Sandboxes clone operation, blocks hook execution
+- **ClawGuard:** Sandboxes clone operation, blocks hook execution
 
 ### 4.3 DevOps Agent (`examples/deploy_agent.py`)
 - Reads deployment config
 - Executes deployment scripts
 - Updates production environment
 - **Risk:** Config could inject malicious commands
-- **ClawGate:** Validates config provenance, blocks untrusted commands
+- **ClawGuard:** Validates config provenance, blocks untrusted commands
 
 ### 4.4 Research Agent (`examples/research_assistant.py`)
 - Searches web for user query
 - Synthesizes findings
 - Saves report
 - **Risk:** Search results could contain XSS/injection
-- **ClawGate:** Sanitizes inputs, validates file operations
+- **ClawGuard:** Sanitizes inputs, validates file operations
 
 **Success Criteria:**
 - 4+ working examples
@@ -180,9 +180,9 @@ tests/attack_pack/
 - Troubleshooting guide
 
 ### 5.2 Package Distribution
-- PyPI release: `pip install clawgate`
+- PyPI release: `pip install clawguard`
 - GitHub releases with changelog
-- Docker image with ClawGate pre-installed
+- Docker image with ClawGuard pre-installed
 
 ### 5.3 Validation Report
 - Attack pack results (50/50 blocked)
@@ -192,27 +192,27 @@ tests/attack_pack/
 **Success Criteria:**
 - Package installable via pip
 - Documentation complete
-- At least 1 blog post or talk demonstrating ClawGate
+- At least 1 blog post or talk demonstrating ClawGuard
 
 ---
 
 ## Phase 6: Ecosystem Integration
 
-**Goal:** ClawGate becomes default security layer for OpenClaw
+**Goal:** ClawGuard becomes default security layer for OpenClaw
 
 **Potential Integrations:**
 
 ### 6.1 OpenClaw Official Plugin
-- Contribute ClawGate to OpenClaw as optional security module
-- Add `--secure` flag to OpenClaw CLI that auto-enables ClawGate
+- Contribute ClawGuard to OpenClaw as optional security module
+- Add `--secure` flag to OpenClaw CLI that auto-enables ClawGuard
 
 ### 6.2 Cloud Platform Support
-- AWS Lambda layer for ClawGate
+- AWS Lambda layer for ClawGuard
 - Google Cloud Run integration
 - Vercel/Netlify edge deployment
 
 ### 6.3 CI/CD Integration
-- GitHub Action for ClawGate validation
+- GitHub Action for ClawGuard validation
 - Pre-commit hook for agent security checks
 - SonarQube plugin for agent code analysis
 
@@ -230,11 +230,11 @@ tests/attack_pack/
 
 ## Non-Goals
 
-**What ClawGate will NOT do:**
+**What ClawGuard will NOT do:**
 
-- **Prompt filtering:** ClawGate is execution-level, not input-level
+- **Prompt filtering:** ClawGuard is execution-level, not input-level
 - **LLM judging:** No LLM evaluates whether command is "safe"
-- **Output sanitization:** ClawGate blocks dangerous executions, doesn't modify outputs
+- **Output sanitization:** ClawGuard blocks dangerous executions, doesn't modify outputs
 - **Model fine-tuning:** Not a training solution
 - **General-purpose WAF:** Specific to AI agent runtime, not web application firewall
 
@@ -255,9 +255,9 @@ tests/attack_pack/
 - Production deployments: 5+ confirmed users
 
 ### Strategic Metrics
-- ClawGate referenced in AI security research papers
+- ClawGuard referenced in AI security research papers
 - Invited to present at AI security conference
-- MVAR adoption driven by ClawGate use case
+- MVAR adoption driven by ClawGuard use case
 
 ---
 
@@ -310,22 +310,22 @@ tests/attack_pack/
 
 **MVAR Security:**
 - MVAR v1.2.3 already validates 50 attack vectors
-- ClawGate reuses MVAR's provenance engine
-- ClawGate is MVAR's first framework-specific adapter
+- ClawGuard reuses MVAR's provenance engine
+- ClawGuard is MVAR's first framework-specific adapter
 
 **OpenClaw:**
 - Popular open-source AI agent framework
 - Strong developer community
-- No built-in execution boundaries (ClawGate fills this gap)
+- No built-in execution boundaries (ClawGuard fills this gap)
 
 **SuperClaw:**
 - Layer 3 (DevOps/security testing)
-- ClawGate is Layer 4 (runtime governance)
+- ClawGuard is Layer 4 (runtime governance)
 - Complementary, not competitive
 
 **MIRRA EOS:**
 - Layer 5 (cognitive architecture)
-- ClawGate protects agents; MIRRA gives agents memory/identity
+- ClawGuard protects agents; MIRRA gives agents memory/identity
 - Different concerns, could integrate
 
 ---

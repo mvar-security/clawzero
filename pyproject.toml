@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clawgate"
+name = "clawguard"
 version = "0.1.0"
-description = "Execution firewall for OpenClaw agents"
+description = "Execution Firewall for AI Agents"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
@@ -36,13 +36,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mvar-security/clawgate"
-Documentation = "https://github.com/mvar-security/clawgate/blob/main/README.md"
-Repository = "https://github.com/mvar-security/clawgate"
-Issues = "https://github.com/mvar-security/clawgate/issues"
+Homepage = "https://github.com/mvar-security/clawguard"
+Documentation = "https://github.com/mvar-security/clawguard/blob/main/README.md"
+Repository = "https://github.com/mvar-security/clawguard"
+Issues = "https://github.com/mvar-security/clawguard/issues"
 
 [tool.setuptools]
-packages = ["clawgate"]
+packages = ["clawguard"]
 
 [tool.black]
 line-length = 100

