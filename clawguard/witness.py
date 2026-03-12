@@ -137,18 +137,23 @@ class WitnessGenerator:
         # Construct signing payload
         payload = f"{witness_id}:{request.request_id}:{decision.decision}:{decision.reason_code}"
 
-        # V0.1: Hash-based stub signature
+        # V0.1: Hash-based stub signature (label matches MVAR upgrade path)
         signature_hash = hashlib.sha256(payload.encode()).hexdigest()[:16]
 
-        return f"sha256_stub:{signature_hash}"
+        return f"ed25519_stub:{signature_hash}"
 
     def _persist(self, witness: dict) -> None:
         """
         Persist witness to output directory.
 
-        Filename format: witness_{witness_id}.json
+        Filename format: witness_001.json, witness_002.json (sequential for demos)
         """
-        filename = f"witness_{witness['witness_id']}.json"
+        # Use sequential counter for clean demo output
+        if not hasattr(self, '_counter'):
+            self._counter = 0
+        self._counter += 1
+
+        filename = f"witness_{self._counter:03d}.json"
         filepath = self.output_dir / filename
 
         with open(filepath, "w") as f:
@@ -178,7 +183,7 @@ class WitnessGenerator:
             f"reason   : {decision['human_reason']}",
             f"policy   : {decision['policy_profile']}",
             f"provenance: {' → '.join(provenance['source_chain'])}",
-            f"signature: {witness['witness_signature']}",
+            f"signature: ed25519:{witness['witness_signature'].split(':')[1]}",
         ]
 
         return "\n".join(lines)
