@@ -62,4 +62,6 @@ __all__ = [
     "generate_witness",
     "get_witness_generator",
     "set_witness_output_dir",
+    # Adapters (optional import)
+    "adapters",
 ]

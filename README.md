@@ -101,6 +101,8 @@ Witness files: 5 generated in examples/witness_output
 
 ## How It Works
 
+### Zero-Config Protection
+
 ```python
 from clawguard import protect, ExecutionBlocked
 
@@ -122,6 +124,26 @@ except ExecutionBlocked as e:
 content = safe_read("/workspace/data.txt")
 ```
 
+### OpenClaw Integration
+
+```python
+from clawguard.adapters import OpenClawAdapter
+
+# Create adapter
+adapter = OpenClawAdapter(profile="prod_locked")
+
+# Wrap OpenClaw tools
+safe_bash = adapter.wrap_tool(bash_execute, sink_type="shell.exec")
+safe_read = adapter.wrap_tool(file_read, sink_type="filesystem.read")
+
+# Or intercept at event level
+adapter.intercept_tool_call({
+    "tool_name": "bash_execute",
+    "arguments": {"command": "rm -rf /"},
+    "context": {"user_message": "clean up files"}
+})  # Raises ExecutionBlocked
+```
+
 ---
 
 ## Status
@@ -130,6 +152,7 @@ content = safe_read("/workspace/data.txt")
 
 **What works:**
 - ✅ `protect()` zero-config wrapper
+- ✅ OpenClaw adapter (tool wrapping + event interception)
 - ✅ 3 policy profiles (dev_balanced, dev_strict, prod_locked)
 - ✅ Path-based allowlists/blocklists + domain-based rules
 - ✅ Signed witness generation (ed25519_stub)
@@ -138,7 +161,7 @@ content = safe_read("/workspace/data.txt")
 **Coming soon:**
 - YAML-based policy configuration
 - Full MVAR integration (currently using embedded runtime)
-- OpenClaw adapter
+- LangChain, AutoGen, CrewAI adapters
 - 50-attack validation suite
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for full implementation plan.
