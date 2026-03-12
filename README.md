@@ -47,36 +47,89 @@ ClawGuard stops that execution before it happens.
 
 ---
 
+## Quickstart (30 seconds)
+
+```bash
+# Clone and run the attack demo
+git clone https://github.com/mvar-security/clawguard.git
+cd clawguard
+python3 examples/attack_demo.py
+```
+
+**Output:**
+```
+============================================================
+         ClawGuard Attack Demo
+  Your agents follow orders.
+  Make sure they're yours.
+============================================================
+
+ATTACK: Prompt injection → read /etc/passwd
+[ Baseline agent - no protection ]
+→ Result: EXECUTED ✗
+
+[ With ClawGuard ] → BLOCKED ✓
+  Reason : Untrusted input attempted to reach protected filesystem.read sink
+
+ATTACK: Shell escalation
+[ Baseline ]  → EXECUTED ✗
+[ ClawGuard ] → BLOCKED ✓
+
+ATTACK: Credential access
+[ Baseline ]  → EXECUTED ✗
+[ ClawGuard ] → BLOCKED ✓
+
+============================================================
+Results: 3/3 attacks blocked | 1/1 benign allowed
+Powered by MVAR runtime
+============================================================
+```
+
+---
+
 ## How It Works
 
 ```python
-from clawguard import protect
-from openclaw import BashTool, FileWriteTool
+from clawguard import protect, ExecutionBlocked
 
-# Wrap your tools
-safe_bash = protect(BashTool(), sinks=["shell"])
-safe_write = protect(FileWriteTool(), sinks=["filesystem"])
+def read_file(path: str) -> str:
+    with open(path) as f:
+        return f.read()
 
-# Use them normally
-agent = OpenClawAgent(tools=[safe_bash, safe_write])
-agent.run("Deploy the app to production")
+# Wrap with ClawGuard protection
+safe_read = protect(read_file, sink="filesystem.read", profile="prod_locked")
+
+# This will be blocked:
+try:
+    safe_read("/etc/passwd")
+except ExecutionBlocked as e:
+    print(f"Blocked: {e.decision.human_reason}")
+    # Blocked: Target path '/etc/passwd' matches blocked path pattern
+
+# This will be allowed (if /workspace is in allowlist):
+content = safe_read("/workspace/data.txt")
 ```
-
-If the agent tries to execute a command influenced by untrusted input (user message, web scrape, API response), ClawGuard blocks it and logs the decision.
 
 ---
 
 ## Status
 
-**ClawGuard is not yet implemented.** This repo is a placeholder.
+**ClawGuard v0.1** is live and functional.
 
-The plan:
-1. Build MVAR adapter for OpenClaw tools
-2. Define sink policies for common attack vectors
-3. Package as `clawguard` pip-installable package
-4. Validate against OpenClaw's attack pack (50+ test cases)
+**What works:**
+- ✅ `protect()` zero-config wrapper
+- ✅ 3 policy profiles (dev_balanced, dev_strict, prod_locked)
+- ✅ Path-based allowlists/blocklists
+- ✅ Signed witness generation
+- ✅ Attack demo (3/3 attacks blocked)
 
-See `docs/ROADMAP.md` for full implementation plan.
+**Coming soon:**
+- YAML-based policy configuration
+- Full MVAR integration (currently using embedded runtime)
+- OpenClaw adapter
+- 50-attack validation suite
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for full implementation plan.
 
 ---
 
