@@ -67,7 +67,6 @@ python3 examples/attack_demo.py
 ATTACK: Prompt injection → read /etc/passwd
 [ Baseline agent - no protection ]
 → Result: EXECUTED ✗
-
 [ With ClawGuard ] → BLOCKED ✓
   Reason : Untrusted input attempted to reach protected filesystem.read sink
 
@@ -79,9 +78,22 @@ ATTACK: Credential access
 [ Baseline ]  → EXECUTED ✗
 [ ClawGuard ] → BLOCKED ✓
 
+ATTACK: API data exfiltration → attacker.com
+[ Baseline ]  → EXECUTED ✗
+[ ClawGuard ] → BLOCKED ✓
+  Reason : Untrusted input attempted to reach protected http.request sink
+
+ATTACK: Benign HTTP request (dev_balanced policy)
+[ Baseline ]  → EXECUTED ✓
+[ ClawGuard ] → ALLOWED ✓
+  Policy  : dev_balanced permits http.request
+
 ============================================================
-Results: 3/3 attacks blocked | 1/1 benign allowed
+Results: 4/4 attacks blocked | 1/1 benign allowed
 Powered by MVAR runtime
+
+Witness files: 5 generated in examples/witness_output
+  Example: witness_001.json
 ============================================================
 ```
 
@@ -119,9 +131,9 @@ content = safe_read("/workspace/data.txt")
 **What works:**
 - ✅ `protect()` zero-config wrapper
 - ✅ 3 policy profiles (dev_balanced, dev_strict, prod_locked)
-- ✅ Path-based allowlists/blocklists
-- ✅ Signed witness generation
-- ✅ Attack demo (3/3 attacks blocked)
+- ✅ Path-based allowlists/blocklists + domain-based rules
+- ✅ Signed witness generation (ed25519_stub)
+- ✅ Attack demo (4/4 attacks blocked, 1/1 benign allowed)
 
 **Coming soon:**
 - YAML-based policy configuration

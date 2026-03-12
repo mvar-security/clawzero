@@ -150,7 +150,7 @@ class MVARRuntime:
         Evaluate path-based or domain-based policy rules.
 
         Args:
-            rule: Policy rule dictionary with mode, allow_paths, block_paths
+            rule: Policy rule dictionary with mode, allow_paths, block_paths, allow_domains, block_domains
             sink_type: Type of sink being accessed
             target: Target path/domain
 
@@ -159,20 +159,38 @@ class MVARRuntime:
         """
         mode = rule.get("mode", "allow")
 
-        # Check block_paths first (takes precedence)
-        block_paths = rule.get("block_paths", [])
-        for pattern in block_paths:
-            if self._path_matches(target, pattern):
-                return "block"
+        # For HTTP requests, check domain rules
+        if sink_type == "http.request":
+            # Check block_domains first
+            block_domains = rule.get("block_domains", [])
+            for pattern in block_domains:
+                if self._domain_matches(target, pattern):
+                    return "block"
 
-        # Check allow_paths
-        allow_paths = rule.get("allow_paths", [])
-        if allow_paths:
-            for pattern in allow_paths:
+            # Check allow_domains
+            allow_domains = rule.get("allow_domains", [])
+            if allow_domains:
+                for pattern in allow_domains:
+                    if self._domain_matches(target, pattern):
+                        return "allow"
+                # No allowlist match → block
+                return "block"
+        else:
+            # For filesystem, check path rules
+            # Check block_paths first (takes precedence)
+            block_paths = rule.get("block_paths", [])
+            for pattern in block_paths:
                 if self._path_matches(target, pattern):
-                    return "allow"
-            # No allowlist match → block
-            return "block"
+                    return "block"
+
+            # Check allow_paths
+            allow_paths = rule.get("allow_paths", [])
+            if allow_paths:
+                for pattern in allow_paths:
+                    if self._path_matches(target, pattern):
+                        return "allow"
+                # No allowlist match → block
+                return "block"
 
         # Default to mode
         return mode
@@ -191,6 +209,25 @@ class MVARRuntime:
         pattern = pattern.replace("/**", "")
 
         return target.startswith(pattern)
+
+    def _domain_matches(self, url: str, pattern: str) -> bool:
+        """
+        Check if URL matches domain pattern.
+
+        V0.1: Simple domain extraction + matching. Future: Regex patterns.
+        """
+        # Extract domain from URL
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        domain = parsed.netloc or parsed.path.split('/')[0]
+
+        # Simple pattern matching
+        if pattern == "*":
+            return True
+
+        # Exact match or subdomain match
+        return domain == pattern or domain.endswith(f".{pattern}")
 
     def _generate_reason(
         self,
