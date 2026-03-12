@@ -13,6 +13,14 @@ from clawguard.contracts import ActionDecision, ActionRequest
 from clawguard.exceptions import ClawGuardConfigError
 from clawguard.witness import generate_witness
 
+# Try to import real MVAR runtime
+try:
+    from mvar.governor import ExecutionGovernor
+
+    MVAR_AVAILABLE = True
+except ImportError:
+    MVAR_AVAILABLE = False
+
 
 class MVARRuntime:
     """
@@ -121,7 +129,9 @@ class MVARRuntime:
             human_reason=human_reason,
             sink_type=sink_type,
             policy_profile=self.profile,
-            trust_level="untrusted",  # V0.1: All inputs untrusted
+            # V0.1: All inputs treated as untrusted
+            # V1.0: Derive from request.prompt_provenance via MVAR taint analysis
+            trust_level="untrusted",
             annotations={
                 "taint_markers": ["external_input", "unverified_content"],
                 "policy_rule_matched": sink_type,
