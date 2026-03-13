@@ -6,16 +6,28 @@
 
 ## Execution Boundary for AI Agents
 
-**Your agents follow orders. Make sure they're yours.**
+---
 
-ClawZero is a deterministic execution boundary for OpenClaw agents.
+<div align="center">
 
-It places policy enforcement between model output and tool execution.
+<!-- Logo slot: add docs/assets/clawzero-logo.png when ready -->
+<h3>Your agents follow orders. Make sure they're yours.</h3>
 
-Powered by MVAR, the runtime for secure AI agents.
+ClawZero is a deterministic execution boundary for OpenClaw agents.  
+It places policy enforcement between model output and tool execution.  
+**Powered by MVAR, the runtime for secure AI agents.**
 
-ClawZero is not a model. It's a runtime firewall.
+ClawZero is not a model. It's a runtime firewall.  
 It works with any LLM, any OpenClaw agent, any tool definition.
+
+<a href="#30-second-quickstart"><strong>Quick Start</strong></a> •
+<a href="#why-clawzero"><strong>Why ClawZero</strong></a> •
+<a href="#attack-demo-proof"><strong>Attack Demo</strong></a> •
+<a href="#canonical-witness-artifact"><strong>Witness Artifact</strong></a>
+
+</div>
+
+---
 
 ## Same input. Same agent. Different execution boundary.
 
