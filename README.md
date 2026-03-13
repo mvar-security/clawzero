@@ -13,6 +13,8 @@ ClawZero brings MVAR's execution boundary to OpenClaw agents.
 **Same input. Same agent. Different boundary.**
 
 ClawZero places a deterministic execution boundary between model output and tool execution. Powered by MVAR.
+ClawZero is not a model. It's a runtime firewall.
+It works with any LLM, any OpenClaw agent, any tool definition.
 
 SAME INPUT. SAME AGENT. DIFFERENT BOUNDARY.
 Standard OpenClaw executes the attack.
