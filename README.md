@@ -1,31 +1,35 @@
 # ClawZero
 
-[![CI](https://github.com/mvar-security/clawzero/actions/workflows/ci.yml/badge.svg)](https://github.com/mvar-security/clawzero/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+![PyPI](https://img.shields.io/pypi/v/clawzero)
+![CI](https://img.shields.io/github/actions/workflow/status/mvar-security/clawzero/test.yml)
+![License](https://img.shields.io/github/license/mvar-security/clawzero)
 
-**ClawZero is a deterministic in-path enforcement substrate for OpenClaw agent flows.**
+## Execution Boundary for AI Agents
 
-ClawZero brings MVAR's execution boundary to OpenClaw agents.
+**Your agents follow orders. Make sure they're yours.**
 
-![ClawZero vs Standard OpenClaw](docs/assets/comparison.png)
+ClawZero is a deterministic execution boundary for OpenClaw agents.
 
-**Same input. Same agent. Different boundary.**
+It places policy enforcement between model output and tool execution.
 
-ClawZero places a deterministic execution boundary between model output and tool execution. Powered by MVAR.
+Powered by MVAR, the runtime for secure AI agents.
+
 ClawZero is not a model. It's a runtime firewall.
 It works with any LLM, any OpenClaw agent, any tool definition.
 
-SAME INPUT. SAME AGENT. DIFFERENT BOUNDARY.
+## Same input. Same agent. Different execution boundary.
+
 Standard OpenClaw executes the attack.
-MVAR blocks it deterministically.
+ClawZero blocks it deterministically.
+
+ClawZero places a deterministic execution boundary between model output and tool execution.
+
+![ClawZero vs Standard OpenClaw](docs/assets/comparison.png)
 
 ## 30-Second Quickstart
 
 ```bash
-git clone https://github.com/mvar-security/clawzero
-cd clawzero
-pip install -e .
+pip install clawzero
 clawzero demo openclaw --mode compare --scenario shell
 ```
 
@@ -37,34 +41,66 @@ MVAR-PROTECTED     →  BLOCKED ✓
 Witness generated  →  YES
 ```
 
+## Why ClawZero?
+
+Autonomous AI agents frequently execute tool calls with high privileges.
+
+When these agents ingest untrusted input, prompt injection can escalate into:
+- shell execution
+- filesystem access
+- credential leakage
+- data exfiltration
+
+ClawZero prevents these escalations by enforcing deterministic policy checks at execution sinks before commands run.
+
+## Threat Model
+
+OpenClaw agents commonly run with tools capable of:
+- shell execution
+- filesystem access
+- credential retrieval
+- outbound network requests
+
+When these agents process untrusted documents or user input, hidden instructions can influence tool calls.
+
+Without an execution boundary, these instructions can trigger high-privilege operations.
+
+ClawZero intercepts these tool calls and enforces policy before execution occurs.
+
 ## Attack Demo Proof
 
-The attack demo is **proof of enforcement behavior**, not the product center.
+The attack demo exists to demonstrate runtime enforcement behavior.
 
-ClawZero is not a model-safety claim.
-It is an execution-boundary claim.
+ClawZero is not a model safety claim.
+
+It is an execution boundary claim.
+
+The demo illustrates how untrusted input can influence agent tool calls and how the ClawZero boundary blocks those actions deterministically.
+
+Run the side-by-side comparison:
+
+```bash
+clawzero demo openclaw --mode compare --scenario shell
+clawzero demo openclaw --mode compare --scenario credentials
+clawzero demo openclaw --mode compare --scenario benign
+```
 
 ## Security and Responsible Use
 
-ClawZero is a defensive security component designed to enforce execution
-boundaries for AI agents.
+ClawZero is a defensive security component designed to enforce execution boundaries for AI agents.
 
-The project includes attack demonstrations and adversarial scenarios in
-order to illustrate how prompt injection and untrusted inputs can reach
-high-privilege execution sinks.
+The project includes attack demonstrations and adversarial scenarios to show how prompt injection and untrusted inputs can reach high-privilege execution sinks.
 
 These demonstrations exist solely for defensive research and education.
 
 When using ClawZero or its demonstrations:
-
 - Only test systems you own or have explicit authorization to evaluate
 - Run demonstrations in sandboxed or isolated environments
 - Treat automated results as signals; verify findings manually
 
 ClawZero is designed to prevent exploitation, not enable it.
 
-The attack demonstrations show how enforcement works; they are not tools
-for performing real-world attacks.
+The attack demonstrations show how enforcement works; they are not tools for performing real-world attacks.
 
 ## Canonical Witness Artifact
 
@@ -96,16 +132,14 @@ for performing real-world attacks.
 ## What ClawZero Is / Is Not
 
 **ClawZero is:**
-
-- An in-path runtime enforcement substrate
-- Deterministic sink policy evaluation at execution time
-- A signed witness artifact generator for auditability
+- an in-path runtime enforcement substrate
+- deterministic sink policy evaluation
+- a signed witness artifact generator
 
 **ClawZero is not:**
-
-- A red-team toolkit
-- An attack simulation platform first
-- An LLM-as-judge safety layer
+- a red-team toolkit
+- an attack simulation platform
+- an LLM-as-judge safety layer
 
 ## CLI
 
@@ -116,22 +150,16 @@ Command families map to enforcement jobs:
 - `clawzero audit` - evaluate deterministic decisions for sink requests
 - `clawzero attack` - replay known attack scenarios as enforcement proofs
 
-## OpenClaw Attack Demo
-
-Run the side-by-side comparison:
-
-```bash
-clawzero demo openclaw --mode compare --scenario shell
-clawzero demo openclaw --mode compare --scenario credentials
-clawzero demo openclaw --mode compare --scenario benign
-```
-
 ## Zero-Config API
 
 ```python
 from clawzero import protect
 
-safe_tool = protect(my_tool, sink="filesystem.read", profile="prod_locked")
+safe_tool = protect(
+    my_tool,
+    sink="filesystem.read",
+    profile="prod_locked"
+)
 ```
 
 ## Policy Profiles
@@ -147,12 +175,11 @@ safe_tool = protect(my_tool, sink="filesystem.read", profile="prod_locked")
 
 ## Powered by MVAR
 
+MVAR is the enforcement engine.
+ClawZero is the OpenClaw adapter.
+MVAR governs the sink policy enforcement decisions.
+
 - MVAR repository: https://github.com/mvar-security/mvar
-- ClawZero is the OpenClaw adapter for MVAR
-- MVAR is the enforcement engine behind ClawZero policy decisions
-
-The MVAR execution governance model is:
-
 - Filed as provisional patent (February 24, 2026, 24 claims)
 - Submitted to NIST RFI Docket NIST-2025-0035
 - Published as preprint on SSRN (February 2026)
