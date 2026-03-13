@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clawzero"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deterministic in-path execution boundary for OpenClaw agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,6 +52,12 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+clawzero = ["demo/**/*", "examples/**/*"]
+
+[tool.setuptools.exclude-package-data]
+clawzero = ["**/__pycache__/*", "**/*.pyc"]
 
 [tool.black]
 line-length = 100

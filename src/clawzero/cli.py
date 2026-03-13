@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import runpy
 import sys
 import uuid
 from pathlib import Path
@@ -18,19 +18,31 @@ from clawzero.contracts import ActionRequest
 from clawzero.runtime import MVARRuntime
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
 def _run_openclaw_demo(mode: str, scenario: str) -> int:
-    demo_script = _repo_root() / "demo" / "openclaw_attack_demo.py"
-    if not demo_script.exists():
-        print(f"Demo script not found: {demo_script}", file=sys.stderr)
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [
+            "clawzero demo openclaw",
+            "--mode",
+            mode,
+            "--scenario",
+            scenario,
+        ]
+        runpy.run_module("clawzero.demo.openclaw_attack_demo", run_name="__main__")
+        return 0
+    except ModuleNotFoundError:
+        print(
+            "Demo module not found: clawzero.demo.openclaw_attack_demo",
+            file=sys.stderr,
+        )
         return 2
-
-    cmd = [sys.executable, str(demo_script), "--mode", mode, "--scenario", scenario]
-    proc = subprocess.run(cmd, check=False)
-    return proc.returncode
+    except SystemExit as exc:
+        code = exc.code
+        if isinstance(code, int):
+            return code
+        return 1
+    finally:
+        sys.argv = original_argv
 
 
 def _cmd_demo_openclaw(args: argparse.Namespace) -> int:
