@@ -10,7 +10,7 @@ ClawZero brings MVAR's execution boundary to OpenClaw agents.
 
 ![ClawZero vs Standard OpenClaw](docs/assets/comparison.png)
 
-*Same input. Same agent. Different boundary.*
+**Same input. Same agent. Different boundary.**
 
 ClawZero places a deterministic execution boundary between model output and tool execution. Powered by MVAR.
 
