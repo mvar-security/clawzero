@@ -65,8 +65,8 @@ class OpenClawAdapter:
 
             return tool(*args, **kwargs)
 
-        protected_tool.__clawzero_protected__ = True
-        protected_tool.__clawzero_sink__ = sink_type
+        setattr(protected_tool, "__clawzero_protected__", True)
+        setattr(protected_tool, "__clawzero_sink__", sink_type)
 
         return protected_tool
 

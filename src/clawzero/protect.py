@@ -106,10 +106,10 @@ def protect(
         # Execute original tool
         return tool(*args, **kwargs)
 
-    # Preserve metadata
-    protected_tool.__clawzero_protected__ = True
-    protected_tool.__clawzero_sink__ = sink
-    protected_tool.__clawzero_profile__ = profile
+    # Preserve metadata for integrations while keeping static typing clean.
+    setattr(protected_tool, "__clawzero_protected__", True)
+    setattr(protected_tool, "__clawzero_sink__", sink)
+    setattr(protected_tool, "__clawzero_profile__", profile)
 
     return protected_tool
 

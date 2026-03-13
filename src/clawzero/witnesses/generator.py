@@ -119,6 +119,8 @@ class WitnessGenerator:
         return f"ed25519_stub:{signature_hash}"
 
     def _persist(self, witness: dict) -> None:
+        if self.output_dir is None:
+            return
         self._counter += 1
         filename = f"witness_{self._counter:03d}.json"
         filepath = self.output_dir / filename
