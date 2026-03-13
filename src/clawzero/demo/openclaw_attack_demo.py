@@ -11,10 +11,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-SCRIPT_DIR = Path(__file__).resolve().parent
 from clawzero.contracts import ActionRequest
 from clawzero.runtime import MVARRuntime
 
+SCRIPT_DIR = Path(__file__).resolve().parent
 BANNER = "═══════════════════════════════════════════════"
 COMPARE_BOX_TOP = "┌─────────────────────────────────────────────┐"
 COMPARE_BOX_MID = "├─────────────────────────────────────────────┤"
