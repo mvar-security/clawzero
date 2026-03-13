@@ -2,35 +2,40 @@
 
 ![PyPI](https://img.shields.io/pypi/v/clawzero)
 ![CI](https://img.shields.io/github/actions/workflow/status/mvar-security/clawzero/test.yml)
-![License](https://img.shields.io/github/license/mvar-security/clawzero)
-
-## Execution Boundary for AI Agents
-
----
+![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 
 <div align="center">
 
-<!-- Logo slot: add docs/assets/clawzero-logo.png when ready -->
-<h3>Your agents follow orders. Make sure they're yours.</h3>
+<p><em>[ ClawZero logo placeholder ]</em></p>
 
-ClawZero is a deterministic execution boundary for OpenClaw agents.  
-It places policy enforcement between model output and tool execution.  
-**Powered by MVAR, the runtime for secure AI agents.**
+<h2>Your agents follow orders. Make sure they're yours.</h2>
 
-ClawZero is not a model. It's a runtime firewall.  
-It works with any LLM, any OpenClaw agent, any tool definition.
+<p>
+ClawZero is a deterministic execution boundary for OpenClaw agents.<br/>
+It places policy enforcement between model output and tool execution.<br/>
+<strong>Powered by MVAR, the runtime for secure AI agents.</strong>
+</p>
 
-<a href="#30-second-quickstart"><strong>Quick Start</strong></a> •
-<a href="#why-clawzero"><strong>Why ClawZero</strong></a> •
-<a href="#attack-demo-proof"><strong>Attack Demo</strong></a> •
-<a href="#canonical-witness-artifact"><strong>Witness Artifact</strong></a>
+<p>
+ClawZero is not a model. It is a runtime enforcement boundary.<br/>
+It works with any LLM, any OpenClaw agent, and any tool definition.
+</p>
+
+<p>
+<a href="https://pypi.org/project/clawzero/"><strong>Install from PyPI</strong></a> •
+<a href="docs/index.md"><strong>Documentation</strong></a>
+</p>
+
+<p>
+<a href="#30-second-quickstart">Quick Start</a> •
+<a href="#why-clawzero">Why ClawZero</a> •
+<a href="#attack-demo-proof">Attack Demo</a> •
+<a href="#canonical-witness-artifact">Witness Artifact</a>
+</p>
 
 </div>
 
----
-
 ## Same input. Same agent. Different execution boundary.
-
 Standard OpenClaw executes the attack.
 ClawZero blocks it deterministically.
 
