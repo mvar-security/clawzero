@@ -2,7 +2,7 @@
 
 ![PyPI](https://img.shields.io/pypi/v/clawzero)
 ![CI](https://img.shields.io/github/actions/workflow/status/mvar-security/clawzero/test.yml)
-![License](https://img.shields.io/badge/License-Apache%202.0-blue)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](https://opensource.org/license/Apache-2.0)
 
 <div align="center">
 
