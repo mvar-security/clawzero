@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-03-13T03:18:34.978499+00:00",
+  "agent_runtime": "openclaw",
+  "sink_type": "tool.custom",
+  "target": "quarterly_report.md",
+  "decision": "allow",
+  "reason_code": "POLICY_ALLOW",
+  "policy_id": "mvar-embedded.v0.1",
+  "provenance": {
+    "source": "user_request",
+    "taint_level": "trusted",
+    "source_chain": [
+      "user_request",
+      "openclaw_tool_call"
+    ],
+    "taint_markers": []
+  },
+  "witness_signature": "ed25519_stub:074e506267efd411",
+  "engine": "embedded-policy-v0.1",
+  "adapter": {
+    "name": "openclaw",
+    "mode": "tool_wrap",
+    "framework": "openclaw"
+  },
+  "witness_id": "7fa587d7-5e5d-41ac-abbe-9acf26529d6c",
+  "request_id": "10330c57-437a-4df9-a1b2-01207f433dc0",
+  "framework": "openclaw",
+  "agent_id": "openclaw_demo_agent",
+  "session_id": "openclaw_demo_session",
+  "action": {
+    "type": "tool_call",
+    "sink_type": "tool.custom",
+    "tool_name": "summarize_text",
+    "target": "quarterly_report.md",
+    "arguments": {
+      "command": "summarize document",
+      "scenario": "{'tool': 'summarize_text', 'sink_type': 'tool.custom', 'target': 'quarterly_report.md', 'command': 'summarize document', 'source': 'user_request', 'taint_markers': [], 'witness_file': 'allowed_witness_benign.json', 'sink_class': 'NON-CRITICAL', 'standard_outcome': 'ALLOWED', 'standard_detail': '  Action classification: SAFE'}"
+    }
+  },
+  "decision_detail": {
+    "result": "allow",
+    "reason_code": "POLICY_ALLOW",
+    "human_reason": "MVAR embedded policy allows non-critical sink",
+    "policy_profile": "prod_locked",
+    "policy_id": "mvar-embedded.v0.1",
+    "engine": "embedded-policy-v0.1"
+  },
+  "annotations": {
+    "policy_rule_matched": "tool.custom",
+    "taint_markers": []
+  }
+}

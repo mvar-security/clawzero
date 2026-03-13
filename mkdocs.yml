@@ -1,0 +1,20 @@
+site_name: ClawZero
+site_description: Deterministic in-path execution boundary for OpenClaw agents
+site_url: https://mvar-security.github.io/clawzero
+repo_url: https://github.com/mvar-security/clawzero
+repo_name: mvar-security/clawzero
+
+theme:
+  name: material
+
+nav:
+  - ClawZero: index.md
+  - Getting Started: getting-started.md
+  - Attack Demo: attack-demo.md
+  - Architecture: architecture.md
+  - Threat Model: threat-model.md
+  - Witness Artifacts: witness-artifacts.md
+  - Policies: policies.md
+  - OpenClaw Integration: openclaw-integration.md
+  - Release Checklist: release-checklist.md
+  - GitHub Launch Copy: github-profile-copy.md

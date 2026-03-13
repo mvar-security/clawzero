@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Powered by MVAR (MIRRA Verified Agent Runtime)
+# Powered by MVAR (Execution Boundary Runtime)
 # github.com/mvar-security/mvar
 """OpenClaw integration example for ClawZero."""
 
@@ -7,8 +7,11 @@ import os
 import sys
 from pathlib import Path
 
-# Add parent directory to path for local development
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 
 from clawzero import set_witness_output_dir
 from clawzero.adapters import OpenClawAdapter
