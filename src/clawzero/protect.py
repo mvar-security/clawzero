@@ -13,7 +13,7 @@ Usage:
 import inspect
 import uuid
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from clawzero.contracts import ActionRequest
 from clawzero.exceptions import ExecutionBlocked

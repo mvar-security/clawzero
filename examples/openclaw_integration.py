@@ -3,7 +3,6 @@
 # github.com/mvar-security/mvar
 """OpenClaw integration example for ClawZero."""
 
-import os
 import sys
 from pathlib import Path
 
@@ -13,9 +12,9 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 
-from clawzero import set_witness_output_dir
-from clawzero.adapters import OpenClawAdapter
-from clawzero.exceptions import ExecutionBlocked
+from clawzero import set_witness_output_dir  # noqa: E402
+from clawzero.adapters import OpenClawAdapter  # noqa: E402
+from clawzero.exceptions import ExecutionBlocked  # noqa: E402
 
 WITNESS_DIR = Path(__file__).parent / "witness_output"
 WITNESS_DIR.mkdir(exist_ok=True)

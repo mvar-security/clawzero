@@ -18,8 +18,8 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from clawzero.contracts import ActionRequest
-from clawzero.runtime import MVARRuntime
+from clawzero.contracts import ActionRequest  # noqa: E402
+from clawzero.runtime import MVARRuntime  # noqa: E402
 
 BANNER = "═══════════════════════════════════════════════"
 COMPARE_BOX_TOP = "┌─────────────────────────────────────────────┐"
