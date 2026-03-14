@@ -12,7 +12,7 @@
   <img alt="ClawZero Header" src="docs/assets/clawzero-header-banner-light-mode-vf.png" width="760">
 </picture>
 
-<h2>Your agents follow orders. Make sure they're yours.</h2>
+<h2>Same input. Same agent. Different execution boundary.</h2>
 
 <p>
 ClawZero is a deterministic execution boundary for OpenClaw agents.<br/>
@@ -39,7 +39,6 @@ It works with any LLM, any OpenClaw agent, and any tool definition.
 
 </div>
 
-## Same input. Same agent. Different execution boundary.
 Standard OpenClaw executes the attack.
 ClawZero blocks it deterministically.
 
