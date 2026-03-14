@@ -6,7 +6,11 @@
 
 <div align="center">
 
-<p><em>[ ClawZero logo placeholder ]</em></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/clawzero-header-banner-dark-mode-vf.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/clawzero-header-banner-light-mode-vf.png">
+  <img alt="ClawZero Header" src="docs/assets/clawzero-header-banner-light-mode-vf.png" width="760">
+</picture>
 
 <h2>Your agents follow orders. Make sure they're yours.</h2>
 
