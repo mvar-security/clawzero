@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from clawzero.contracts import ActionDecision, ActionRequest
 
@@ -22,10 +22,13 @@ class WitnessGenerator:
         if self.output_dir:
             self.output_dir.mkdir(parents=True, exist_ok=True)
         self._counter = 0
+        self._last_content_hash: Optional[str] = None
+        self._last_chain_index = 0
 
     def generate(self, request: ActionRequest, decision: ActionDecision) -> dict:
         witness_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).isoformat()
+        chain_index, previous_hash = self._resolve_chain_state()
 
         source_chain = self._extract_source_chain(request)
         taint_markers = self._extract_taint_markers(request, decision)
@@ -40,6 +43,9 @@ class WitnessGenerator:
         )
 
         witness = {
+            "schema_version": "1.1",
+            "chain_index": chain_index,
+            "previous_hash": previous_hash,
             "timestamp": timestamp,
             "agent_runtime": request.framework,
             "sink_type": decision.sink_type,
@@ -79,8 +85,11 @@ class WitnessGenerator:
             },
             "annotations": decision.annotations,
         }
+        witness["content_hash"] = self._content_hash(witness)
 
         decision.witness_id = witness_id
+        self._last_chain_index = chain_index
+        self._last_content_hash = witness["content_hash"]
 
         if self.output_dir:
             self._persist(witness)
@@ -111,12 +120,66 @@ class WitnessGenerator:
     def _sign(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision
     ) -> str:
+        existing_signature = decision.annotations.get("witness_signature")
+        if isinstance(existing_signature, str) and existing_signature:
+            return existing_signature
+
+        mvar_signature = decision.annotations.get("mvar_result", {}).get("witness_signature")
+        if isinstance(mvar_signature, str) and mvar_signature:
+            return mvar_signature
+
         payload = (
             f"{witness_id}:{request.request_id}:{decision.sink_type}:"
             f"{decision.decision}:{decision.reason_code}:{decision.policy_id}:{decision.engine}"
         )
         signature_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         return f"ed25519_stub:{signature_hash}"
+
+    def _resolve_chain_state(self) -> tuple[int, str]:
+        if self.output_dir is None:
+            if self._last_chain_index <= 0:
+                return 1, "genesis"
+            return self._last_chain_index + 1, self._last_content_hash or "genesis"
+
+        witnesses = sorted(self.output_dir.glob("witness_*.json"))
+        if not witnesses:
+            return 1, "genesis"
+
+        last_witness = self._load_last_witness(witnesses[-1])
+        if not isinstance(last_witness, dict):
+            return 1, "genesis"
+
+        try:
+            last_index = int(last_witness.get("chain_index", len(witnesses)))
+        except (TypeError, ValueError):
+            last_index = len(witnesses)
+
+        content_hash = str(last_witness.get("content_hash", "")).strip()
+        if not content_hash.startswith("sha256:"):
+            content_hash = self._sha256_prefix(self._canonical_json(last_witness))
+
+        return last_index + 1, content_hash
+
+    @staticmethod
+    def _load_last_witness(path: Path) -> dict[str, Any] | None:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _canonical_json(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+    @staticmethod
+    def _sha256_prefix(payload: str) -> str:
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return f"sha256:{digest}"
+
+    def _content_hash(self, witness: dict[str, Any]) -> str:
+        payload = dict(witness)
+        payload.pop("content_hash", None)
+        return self._sha256_prefix(self._canonical_json(payload))
 
     def _persist(self, witness: dict) -> None:
         if self.output_dir is None:
@@ -130,6 +193,10 @@ class WitnessGenerator:
         lines = [
             "Execution Decision Witness",
             "-" * 40,
+            f"schema    : {witness.get('schema_version', 'N/A')}",
+            f"index     : {witness.get('chain_index', 'N/A')}",
+            f"prev_hash : {witness.get('previous_hash', 'N/A')}",
+            f"hash      : {witness.get('content_hash', 'N/A')}",
             f"sink      : {witness.get('sink_type', 'N/A')}",
             f"target    : {witness.get('target', 'N/A')}",
             f"decision  : {str(witness.get('decision', 'N/A')).upper()}",

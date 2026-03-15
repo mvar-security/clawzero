@@ -171,6 +171,48 @@ class MVARRuntime:
     def _normalize_mvar_result(
         self, request: ActionRequest, result: Any
     ) -> Optional[ActionDecision]:
+        if (
+            hasattr(result, "decision")
+            and hasattr(result, "reason_code")
+            and hasattr(result, "policy_id")
+            and hasattr(result, "engine")
+        ):
+            decision_value = str(getattr(result, "decision", "allow")).lower()
+            if decision_value not in {"allow", "block", "annotate"}:
+                return None
+            provenance = getattr(result, "provenance", {})
+            if not isinstance(provenance, dict):
+                provenance = {}
+            trace = getattr(result, "evaluation_trace", [])
+            if not isinstance(trace, list):
+                trace = []
+            witness_signature = str(getattr(result, "witness_signature", "") or "")
+            trust_level = str(provenance.get("taint_level", "")).lower() or self._derive_trust_level(request)
+            enforcement_action = getattr(result, "enforcement_action", None)
+            annotations = {
+                "witness_signature": witness_signature,
+                "provenance": provenance,
+                "evaluation_trace": [str(item) for item in trace],
+                "enforcement_action": enforcement_action,
+                "taint_markers": self._extract_taint_markers(request),
+            }
+            return ActionDecision(
+                request_id=request.request_id,
+                decision=decision_value,
+                reason_code=str(getattr(result, "reason_code", "POLICY_ALLOW")),
+                human_reason=str(
+                    getattr(result, "human_reason", "")
+                    or f"MVAR policy decision: {getattr(result, 'reason_code', 'POLICY_ALLOW')}"
+                ),
+                sink_type=request.sink_type,
+                target=request.target,
+                policy_profile=request.policy_profile,
+                engine=str(getattr(result, "engine", "mvar-security")),
+                policy_id=str(getattr(result, "policy_id", f"mvar-security.v{self._mvar_version}")),
+                trust_level="trusted" if trust_level == "trusted" else "untrusted",
+                annotations=annotations,
+            )
+
         if isinstance(result, ActionDecision):
             result.engine = "mvar-security"
             result.policy_id = f"mvar-security.v{self._mvar_version}"
@@ -195,6 +237,10 @@ class MVARRuntime:
                 trust_level=self._derive_trust_level(request),
                 annotations={
                     "mvar_result": result,
+                    "witness_signature": str(result.get("witness_signature", "")),
+                    "provenance": result.get("provenance", {}),
+                    "evaluation_trace": result.get("evaluation_trace", []),
+                    "enforcement_action": result.get("enforcement_action"),
                     "taint_markers": self._extract_taint_markers(request),
                 },
             )

@@ -22,12 +22,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []
-
-[project.optional-dependencies]
-mvar = [
+dependencies = [
     "mvar-security>=1.4.0",
 ]
+
+[project.optional-dependencies]
 
 dev = [
     "pytest>=7.0.0",

@@ -16,9 +16,10 @@ from pathlib import Path
 
 from clawzero.contracts import ActionRequest
 from clawzero.runtime import MVARRuntime
+from clawzero.witnesses.verify import verify_witness_chain, verify_witness_file
 
 
-def _run_openclaw_demo(mode: str, scenario: str) -> int:
+def _run_openclaw_demo(mode: str, scenario: str, output_dir: str | None = None) -> int:
     original_argv = sys.argv[:]
     try:
         sys.argv = [
@@ -28,6 +29,8 @@ def _run_openclaw_demo(mode: str, scenario: str) -> int:
             "--scenario",
             scenario,
         ]
+        if output_dir:
+            sys.argv.extend(["--output-dir", output_dir])
         runpy.run_module("clawzero.demo.openclaw_attack_demo", run_name="__main__")
         return 0
     except ModuleNotFoundError:
@@ -46,12 +49,12 @@ def _run_openclaw_demo(mode: str, scenario: str) -> int:
 
 
 def _cmd_demo_openclaw(args: argparse.Namespace) -> int:
-    return _run_openclaw_demo(mode=args.mode, scenario=args.scenario)
+    return _run_openclaw_demo(mode=args.mode, scenario=args.scenario, output_dir=args.output_dir)
 
 
 def _cmd_attack_replay(args: argparse.Namespace) -> int:
     # Attack replay is intentionally routed through the same enforcement demo.
-    return _run_openclaw_demo(mode="compare", scenario=args.scenario)
+    return _run_openclaw_demo(mode="compare", scenario=args.scenario, output_dir=getattr(args, "output_dir", None))
 
 
 def _cmd_audit_decision(args: argparse.Namespace) -> int:
@@ -115,29 +118,30 @@ def _cmd_witness_verify(args: argparse.Namespace) -> int:
         print(f"Witness file not found: {path}", file=sys.stderr)
         return 2
 
-    witness = json.loads(path.read_text(encoding="utf-8"))
-    required = {
-        "timestamp",
-        "agent_runtime",
-        "sink_type",
-        "target",
-        "decision",
-        "reason_code",
-        "policy_id",
-        "engine",
-        "provenance",
-        "adapter",
-        "witness_signature",
-    }
-    missing = sorted(required.difference(witness.keys()))
-    if missing:
-        print("invalid witness")
-        print(f"missing keys: {', '.join(missing)}")
+    result = verify_witness_file(path, require_chain=True)
+    if not result.valid:
+        print(f"INVALID: {'; '.join(result.reasons)}")
         return 1
 
-    print("witness valid")
-    print(f"decision: {witness.get('decision')}")
-    print(f"policy : {witness.get('policy_id')}")
+    print("VALID")
+    return 0
+
+
+def _cmd_witness_verify_chain(args: argparse.Namespace) -> int:
+    directory = Path(args.dir)
+    if not directory.exists() or not directory.is_dir():
+        print(f"Witness directory not found: {directory}", file=sys.stderr)
+        return 2
+
+    result = verify_witness_chain(directory)
+    if not result.valid:
+        if result.broken_index is not None:
+            print(f"CHAIN BROKEN at index {result.broken_index}: {'; '.join(result.reasons)}")
+        else:
+            print(f"CHAIN BROKEN: {'; '.join(result.reasons)}")
+        return 1
+
+    print(f"CHAIN VALID ({result.count} witnesses)")
     return 0
 
 
@@ -163,6 +167,11 @@ def build_parser() -> argparse.ArgumentParser:
     demo_openclaw.add_argument(
         "--scenario", choices=["shell", "credentials", "benign"], default="shell"
     )
+    demo_openclaw.add_argument(
+        "--output-dir",
+        default=None,
+        help="Optional directory for canonical witness outputs (witness_*.json).",
+    )
     demo_openclaw.set_defaults(func=_cmd_demo_openclaw)
 
     witness = subparsers.add_parser(
@@ -179,6 +188,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     witness_verify.add_argument("--file", required=True, help="Path to witness JSON file.")
     witness_verify.set_defaults(func=_cmd_witness_verify)
+
+    witness_verify_chain = witness_sub.add_parser(
+        "verify-chain", help="Verify sequential hash-chain integrity for witness directory."
+    )
+    witness_verify_chain.add_argument("--dir", required=True, help="Directory containing witness JSON files.")
+    witness_verify_chain.set_defaults(func=_cmd_witness_verify_chain)
 
     audit = subparsers.add_parser(
         "audit",

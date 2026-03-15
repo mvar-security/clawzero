@@ -77,6 +77,11 @@ def parse_args() -> argparse.Namespace:
         default="shell",
         help="Scenario to execute",
     )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Optional directory for canonical witness output (witness_*.json).",
+    )
     return parser.parse_args()
 
 
@@ -179,15 +184,31 @@ def _persist_expected_witness(witness: dict[str, Any], filename: str) -> Path:
     )
 
 
-def _print_mvar(scenario_name: str, scenario: dict[str, Any]) -> dict[str, str]:
+def _latest_witness_path(output_dir: Path) -> Path | None:
+    candidates = sorted(output_dir.glob("witness_*.json"))
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def _print_mvar(
+    scenario_name: str,
+    scenario: dict[str, Any],
+    output_dir: Path | None = None,
+) -> dict[str, str]:
     _ = _load_payload()
 
-    runtime = MVARRuntime(profile="prod_locked")
+    runtime = MVARRuntime(profile="prod_locked", witness_dir=output_dir)
     request = _build_request(scenario)
     decision = runtime.evaluate(request)
 
     witness = runtime.last_witness or {}
-    witness_path = _persist_expected_witness(witness, str(scenario["witness_file"]))
+    if output_dir is not None:
+        witness_path = _latest_witness_path(output_dir)
+        if witness_path is None:
+            raise RuntimeError("Expected witness file in output directory, found none.")
+    else:
+        witness_path = _persist_expected_witness(witness, str(scenario["witness_file"]))
 
     taint_level = str(request.prompt_provenance.get("taint_level", "untrusted"))
     provenance_source = str(request.prompt_provenance.get("source", "unknown"))
@@ -256,7 +277,11 @@ def _print_compare_summary(standard_outcome: str, mvar_outcome: str, policy_id: 
     print(COMPARE_BOX_BOT)
 
 
-def run_compare(scenario_name: str, scenario: dict[str, Any]) -> None:
+def run_compare(
+    scenario_name: str,
+    scenario: dict[str, Any],
+    output_dir: Path | None = None,
+) -> None:
     print("SAME INPUT. SAME AGENT. DIFFERENT BOUNDARY.")
     print("Standard OpenClaw executes the attack.")
     print("MVAR blocks it deterministically.")
@@ -266,7 +291,7 @@ def run_compare(scenario_name: str, scenario: dict[str, Any]) -> None:
     print()
     print("-" * 47)
     print()
-    mvar_meta = _print_mvar(scenario_name, scenario)
+    mvar_meta = _print_mvar(scenario_name, scenario, output_dir=output_dir)
 
     _print_compare_summary(
         standard_outcome=standard_meta["standard_outcome"],
@@ -279,13 +304,16 @@ def run_compare(scenario_name: str, scenario: dict[str, Any]) -> None:
 def main() -> None:
     args = parse_args()
     scenario = SCENARIOS[args.scenario]
+    output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.mode == "standard":
         _print_standard(args.scenario, scenario)
     elif args.mode == "mvar":
-        _print_mvar(args.scenario, scenario)
+        _print_mvar(args.scenario, scenario, output_dir=output_dir)
     else:
-        run_compare(args.scenario, scenario)
+        run_compare(args.scenario, scenario, output_dir=output_dir)
 
 
 if __name__ == "__main__":
