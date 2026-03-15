@@ -56,9 +56,9 @@ def main() -> None:
         }
     )
     print("[chain] ", chain_result)
-    print("[witness_provenance] ", adapter.runtime.last_witness["provenance"])
+    witness = adapter.runtime.last_witness or {}
+    print("[witness_provenance] ", witness.get("provenance", {}))
 
 
 if __name__ == "__main__":
     main()
-

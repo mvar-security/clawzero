@@ -158,9 +158,12 @@ def _validate_chain_fields(witness: dict[str, Any]) -> str | None:
     if schema != "1.1":
         return "unsupported schema_version"
 
+    chain_index_value = witness.get("chain_index")
+    if chain_index_value is None:
+        return "chain_index is not an integer"
     try:
-        index = int(witness.get("chain_index"))
-    except (TypeError, ValueError):
+        index = int(str(chain_index_value))
+    except ValueError:
         return "chain_index is not an integer"
     if index < 1:
         return "chain_index must be >= 1"
