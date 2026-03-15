@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from clawzero.contracts import ActionRequest
+from clawzero.contracts import ActionRequest, InputClass
 from clawzero.exceptions import ExecutionBlocked
 from clawzero.runtime import MVARRuntime
 
@@ -102,6 +102,7 @@ class LangChainAdapter:
         sink_type: str,
         context: _EnforcementContext,
     ) -> ActionRequest:
+        provenance = self._build_prompt_provenance(context.prompt_input)
         return ActionRequest(
             request_id=str(uuid.uuid4()),
             framework="langchain",
@@ -112,7 +113,8 @@ class LangChainAdapter:
             tool_name=tool_name,
             target=context.target,
             arguments=context.arguments,
-            prompt_provenance=self._build_prompt_provenance(context.prompt_input),
+            input_class=self._input_class_from_provenance(provenance).value,
+            prompt_provenance=provenance,
             policy_profile=self.profile,
             metadata={
                 "adapter": {
@@ -151,6 +153,19 @@ class LangChainAdapter:
             "adapter_version": self.ADAPTER_VERSION,
             "framework": "langchain",
         }
+
+    @staticmethod
+    def _input_class_from_provenance(provenance: dict[str, Any]) -> InputClass:
+        value = str(provenance.get("input_class", "")).strip().lower()
+        if value in {member.value for member in InputClass}:
+            return InputClass(value)
+
+        taint = str(provenance.get("taint_level", "")).strip().lower()
+        if taint in {"trusted", "clean"}:
+            return InputClass.TRUSTED
+        if taint in {"pre_authorized", "pre-authorized"}:
+            return InputClass.PRE_AUTHORIZED
+        return InputClass.UNTRUSTED
 
     def _infer_sink_type(self, tool: Any) -> str:
         return self._infer_sink_type_from_name(self._tool_name(tool))

@@ -32,6 +32,7 @@ class WitnessGenerator:
 
         source_chain = self._extract_source_chain(request)
         taint_markers = self._extract_taint_markers(request, decision)
+        cec_status = self._extract_cec_status(decision)
 
         adapter_metadata = request.metadata.get(
             "adapter",
@@ -59,6 +60,8 @@ class WitnessGenerator:
                 "source_chain": source_chain,
                 "taint_markers": taint_markers,
             },
+            "input_class": str(request.input_class),
+            "cec_status": cec_status,
             "witness_signature": self._sign(witness_id, request, decision),
             "engine": decision.engine,
             "adapter": adapter_metadata,
@@ -116,6 +119,25 @@ class WitnessGenerator:
             return [str(item) for item in decision_markers]
 
         return []
+
+    @staticmethod
+    def _extract_cec_status(decision: ActionDecision) -> dict[str, bool]:
+        fallback = {
+            "has_private_data": False,
+            "has_untrusted_input": False,
+            "has_exfil_capability": False,
+            "cec_triggered": False,
+        }
+        raw = decision.annotations.get("cec_status")
+        if not isinstance(raw, dict):
+            return fallback
+
+        return {
+            "has_private_data": bool(raw.get("has_private_data", False)),
+            "has_untrusted_input": bool(raw.get("has_untrusted_input", False)),
+            "has_exfil_capability": bool(raw.get("has_exfil_capability", False)),
+            "cec_triggered": bool(raw.get("cec_triggered", False)),
+        }
 
     def _sign(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision

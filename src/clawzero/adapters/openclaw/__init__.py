@@ -7,7 +7,7 @@ Integrates OpenClaw tool activity with MVAR enforcement.
 import uuid
 from typing import Callable, Optional
 
-from clawzero.contracts import ActionRequest
+from clawzero.contracts import ActionRequest, InputClass
 from clawzero.exceptions import ExecutionBlocked
 from clawzero.runtime import MVARRuntime
 
@@ -51,6 +51,7 @@ class OpenClawAdapter:
                 tool_name=tool_name,
                 target=target,
                 arguments={"args": args, "kwargs": kwargs},
+                input_class=InputClass.UNTRUSTED.value,
                 prompt_provenance=self._build_prompt_provenance(),
                 policy_profile=self.profile,
                 metadata={
@@ -88,6 +89,7 @@ class OpenClawAdapter:
             tool_name=tool_name,
             target=target,
             arguments=arguments,
+            input_class=InputClass.UNTRUSTED.value,
             prompt_provenance=self._build_prompt_provenance(),
             policy_profile=self.profile,
             metadata={

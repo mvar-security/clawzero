@@ -27,7 +27,7 @@ __version__ = "0.1.1"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 
-from clawzero.contracts import ActionDecision, ActionRequest
+from clawzero.contracts import ActionDecision, ActionRequest, InputClass
 from clawzero.adapters import (
     OpenClawAdapter,
     LangChainAdapter,
@@ -61,6 +61,7 @@ __all__ = [
     # Contracts
     "ActionRequest",
     "ActionDecision",
+    "InputClass",
     # Exceptions
     "ExecutionBlocked",
     "ClawZeroError",

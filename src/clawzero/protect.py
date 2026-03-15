@@ -15,7 +15,7 @@ import uuid
 from functools import wraps
 from typing import Callable, Optional
 
-from clawzero.contracts import ActionRequest
+from clawzero.contracts import ActionRequest, InputClass
 from clawzero.exceptions import ExecutionBlocked
 from clawzero.runtime import MVARRuntime
 
@@ -37,6 +37,7 @@ def protect(
     sink: str = "tool.custom",
     profile: str = "dev_balanced",
     framework: str = "python_tools",
+    input_class: InputClass | str = InputClass.UNTRUSTED,
 ) -> Callable:
     """
     Wrap a tool with ClawZero enforcement.
@@ -48,6 +49,7 @@ def protect(
         sink: Sink type classification (e.g., "filesystem.read", "shell.exec")
         profile: Policy profile to apply (dev_balanced, dev_strict, prod_locked)
         framework: Framework identifier for logging
+        input_class: Request integrity class (trusted, pre_authorized, untrusted)
 
     Returns:
         Protected version of the tool that enforces policy before execution
@@ -74,6 +76,7 @@ def protect(
     """
     runtime = get_runtime(profile)
     tool_name = tool.__name__ if hasattr(tool, "__name__") else str(tool)
+    normalized_input_class = _normalize_input_class(input_class)
 
     @wraps(tool)
     def protected_tool(*args, **kwargs):
@@ -89,6 +92,24 @@ def protect(
             tool_name=tool_name,
             target=target,
             arguments={"args": args, "kwargs": kwargs},
+            input_class=normalized_input_class.value,
+            prompt_provenance={
+                "source": "user_request"
+                if normalized_input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+                else "external_document",
+                "taint_level": "trusted"
+                if normalized_input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+                else "untrusted",
+                "source_chain": [
+                    "user_request"
+                    if normalized_input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+                    else "external_document",
+                    "tool_call",
+                ],
+                "taint_markers": []
+                if normalized_input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+                else ["external_input"],
+            },
             policy_profile=profile,
         )
 
@@ -152,3 +173,12 @@ def _extract_target(tool: Callable, args: tuple, kwargs: dict) -> Optional[str]:
         return str(args[0])
 
     return None
+
+
+def _normalize_input_class(input_class: InputClass | str) -> InputClass:
+    if isinstance(input_class, InputClass):
+        return input_class
+    value = str(input_class).strip().lower()
+    if value in {member.value for member in InputClass}:
+        return InputClass(value)
+    return InputClass.UNTRUSTED

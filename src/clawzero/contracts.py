@@ -5,7 +5,16 @@ Data contracts for execution-boundary requests and decisions.
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Optional
+
+
+class InputClass(str, Enum):
+    """Request integrity class for policy strictness."""
+
+    TRUSTED = "trusted"
+    PRE_AUTHORIZED = "pre_authorized"
+    UNTRUSTED = "untrusted"
 
 
 @dataclass
@@ -27,6 +36,7 @@ class ActionRequest:
     arguments: dict[str, Any] = field(default_factory=dict)
     prompt_provenance: dict[str, Any] = field(default_factory=dict)
     conversation_context: dict[str, Any] = field(default_factory=dict)
+    input_class: Optional[str] = None
 
     policy_profile: str = "dev_balanced"
     metadata: dict[str, Any] = field(default_factory=dict)

@@ -59,7 +59,7 @@ def _cmd_attack_replay(args: argparse.Namespace) -> int:
 
 
 def _cmd_audit_decision(args: argparse.Namespace) -> int:
-    runtime = MVARRuntime(profile=args.profile)
+    runtime = MVARRuntime(profile=args.profile, cec_enforce=args.cec_enforce)
 
     taint_markers = [m.strip() for m in args.taint_markers.split(",") if m.strip()]
     request = ActionRequest(
@@ -226,6 +226,11 @@ def build_parser() -> argparse.ArgumentParser:
     audit_decision.add_argument("--source", default="external_document")
     audit_decision.add_argument("--taint-level", default="untrusted")
     audit_decision.add_argument("--taint-markers", default="prompt_injection,external_content")
+    audit_decision.add_argument(
+        "--cec-enforce",
+        action="store_true",
+        help="Enable CEC auto-escalation to prod_locked when all CEC legs are present.",
+    )
     audit_decision.set_defaults(func=_cmd_audit_decision)
 
     attack = subparsers.add_parser(

@@ -7,12 +7,13 @@ MVAR-first execution boundary with explicit embedded fallback.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-from clawzero.contracts import ActionDecision, ActionRequest
+from clawzero.contracts import ActionDecision, ActionRequest, InputClass
 from clawzero.exceptions import ClawZeroConfigError
 from clawzero.witness import generate_witness, set_witness_output_dir
 
@@ -26,10 +27,17 @@ class MVARRuntime:
         self,
         profile: str = "dev_balanced",
         witness_dir: Optional[Path] = None,
+        cec_enforce: bool = False,
     ):
         self.profile = profile
         self.witness_dir = witness_dir
+        self.cec_enforce = cec_enforce
         self.last_witness: Optional[dict[str, Any]] = None
+        self._cec_state = {
+            "has_private_data": False,
+            "has_untrusted_input": False,
+            "has_exfil_capability": False,
+        }
 
         self._mvar_governor: Any = None
         self._mvar_version = "unknown"
@@ -116,13 +124,122 @@ class MVARRuntime:
 
     def evaluate(self, request: ActionRequest) -> ActionDecision:
         """Evaluate request through active engine and emit witness."""
-        if self._mvar_available:
-            decision = self._evaluate_via_mvar(request)
-        else:
-            decision = self._evaluate_embedded(request)
+        prepared_request = self._prepare_request(request)
 
-        self.last_witness = generate_witness(request, decision)
+        if self._mvar_available:
+            decision = self._evaluate_via_mvar(prepared_request)
+        else:
+            decision = self._evaluate_embedded(prepared_request)
+
+        cec_status = self._update_cec_state(prepared_request)
+        if (
+            self.cec_enforce
+            and cec_status["cec_triggered"]
+            and prepared_request.policy_profile != "prod_locked"
+        ):
+            prepared_request = replace(prepared_request, policy_profile="prod_locked")
+            if self._mvar_available:
+                decision = self._evaluate_via_mvar(prepared_request)
+            else:
+                decision = self._evaluate_embedded(prepared_request)
+            decision.annotations["cec_escalated_profile"] = "prod_locked"
+
+        decision.annotations["input_class"] = prepared_request.input_class
+        decision.annotations["effective_policy_profile"] = prepared_request.policy_profile
+        decision.annotations["cec_status"] = cec_status
+
+        self.last_witness = generate_witness(prepared_request, decision)
         return decision
+
+    def _prepare_request(self, request: ActionRequest) -> ActionRequest:
+        input_class = self._resolve_input_class(request)
+        normalized_profile = self._apply_input_class_overrides(
+            request.policy_profile, input_class
+        )
+
+        provenance = dict(request.prompt_provenance or {})
+        source = str(provenance.get("source", "unknown_source"))
+        taint_markers = provenance.get("taint_markers")
+        if not isinstance(taint_markers, list):
+            taint_markers = []
+        source_chain = provenance.get("source_chain")
+        if not isinstance(source_chain, list) or not source_chain:
+            source_chain = [source, request.action_type]
+
+        provenance["source"] = source
+        provenance["taint_level"] = (
+            "trusted"
+            if input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+            else "untrusted"
+        )
+        provenance["taint_markers"] = [str(item) for item in taint_markers]
+        provenance["source_chain"] = [str(item) for item in source_chain]
+
+        return replace(
+            request,
+            input_class=input_class.value,
+            prompt_provenance=provenance,
+            policy_profile=normalized_profile,
+        )
+
+    def _resolve_input_class(self, request: ActionRequest) -> InputClass:
+        raw_value = str(request.input_class or "").strip().lower()
+        if raw_value in {member.value for member in InputClass}:
+            return InputClass(raw_value)
+
+        taint_level = str(request.prompt_provenance.get("taint_level", "")).strip().lower()
+        if taint_level in {"trusted", "clean"}:
+            return InputClass.TRUSTED
+        if taint_level in {"pre_authorized", "pre-authorized"}:
+            return InputClass.PRE_AUTHORIZED
+        return InputClass.UNTRUSTED
+
+    def _apply_input_class_overrides(self, profile: str, input_class: InputClass) -> str:
+        if input_class == InputClass.UNTRUSTED and profile == "dev_balanced":
+            return "dev_strict"
+        return profile
+
+    def _update_cec_state(self, request: ActionRequest) -> dict[str, bool]:
+        if self._is_private_data_sink(request):
+            self._cec_state["has_private_data"] = True
+        if self._is_untrusted_request(request):
+            self._cec_state["has_untrusted_input"] = True
+        if self._is_exfil_capability_sink(request):
+            self._cec_state["has_exfil_capability"] = True
+
+        return {
+            "has_private_data": self._cec_state["has_private_data"],
+            "has_untrusted_input": self._cec_state["has_untrusted_input"],
+            "has_exfil_capability": self._cec_state["has_exfil_capability"],
+            "cec_triggered": all(self._cec_state.values()),
+        }
+
+    def _is_untrusted_request(self, request: ActionRequest) -> bool:
+        if self._resolve_input_class(request) == InputClass.UNTRUSTED:
+            return True
+        taint = str(request.prompt_provenance.get("taint_level", "")).lower()
+        return taint == "untrusted"
+
+    def _is_private_data_sink(self, request: ActionRequest) -> bool:
+        if request.sink_type == "credentials.access":
+            return True
+        if request.sink_type != "filesystem.read":
+            return False
+        target = str(request.target or "").lower()
+        sensitive_tokens = (
+            "/etc/",
+            "/.ssh/",
+            ".env",
+            "id_rsa",
+            "credentials",
+            "secret",
+            "token",
+            "password",
+        )
+        return any(token in target for token in sensitive_tokens)
+
+    def _is_exfil_capability_sink(self, request: ActionRequest) -> bool:
+        return request.sink_type in {"http.request", "filesystem.write", "shell.exec"}
 
     def _evaluate_via_mvar(self, request: ActionRequest) -> ActionDecision:
         """
@@ -231,7 +348,7 @@ class MVARRuntime:
                 human_reason=str(result.get("human_reason", "MVAR policy decision")),
                 sink_type=request.sink_type,
                 target=request.target,
-                policy_profile=self.profile,
+                policy_profile=request.policy_profile,
                 engine="mvar-security",
                 policy_id=f"mvar-security.v{self._mvar_version}",
                 trust_level=self._derive_trust_level(request),
@@ -250,6 +367,8 @@ class MVARRuntime:
     def _evaluate_embedded(self, request: ActionRequest) -> ActionDecision:
         sink_type = request.sink_type
         target = request.target or ""
+        input_class = self._resolve_input_class(request)
+        active_profile = request.policy_profile or self.profile
 
         if sink_type == "shell.exec":
             return self._decision_block(
@@ -266,10 +385,33 @@ class MVARRuntime:
             )
 
         if sink_type == "filesystem.read":
-            return self._evaluate_filesystem_read(request, target)
+            return self._evaluate_filesystem_read(request, target, active_profile)
 
         if sink_type == "http.request":
-            return self._evaluate_http_request(request, target)
+            return self._evaluate_http_request(request, target, active_profile)
+
+        if sink_type == "tool.custom":
+            if active_profile == "dev_strict":
+                if input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}:
+                    return self._decision_allow(
+                        request,
+                        reason_code="POLICY_ALLOW",
+                        human_reason="MVAR strict profile allowed trusted custom tool sink",
+                    )
+                return self._decision_annotate(
+                    request,
+                    reason_code="STEP_UP_REQUIRED",
+                    human_reason="MVAR strict profile requires review for untrusted custom sink",
+                    enforcement_action="block_until_approved",
+                )
+
+            if active_profile == "dev_balanced" and input_class == InputClass.UNTRUSTED:
+                return self._decision_annotate(
+                    request,
+                    reason_code="STEP_UP_REQUIRED",
+                    human_reason="MVAR balanced profile requires review for untrusted custom sink",
+                    enforcement_action="block_until_approved",
+                )
 
         return self._decision_allow(
             request,
@@ -278,7 +420,7 @@ class MVARRuntime:
         )
 
     def _evaluate_filesystem_read(
-        self, request: ActionRequest, target: str
+        self, request: ActionRequest, target: str, active_profile: str
     ) -> ActionDecision:
         sensitive_prefixes = (
             "/etc/",
@@ -287,7 +429,7 @@ class MVARRuntime:
             "~/.ssh/",
         )
 
-        if self.profile == "dev_balanced":
+        if active_profile == "dev_balanced":
             if target.startswith(sensitive_prefixes):
                 return self._decision_block(
                     request,
@@ -300,7 +442,7 @@ class MVARRuntime:
                 human_reason="MVAR policy allowed non-sensitive read path",
             )
 
-        if self.profile == "dev_strict":
+        if active_profile == "dev_strict":
             if target.startswith("/workspace/"):
                 return self._decision_allow(
                     request,
@@ -327,19 +469,19 @@ class MVARRuntime:
         )
 
     def _evaluate_http_request(
-        self, request: ActionRequest, target: str
+        self, request: ActionRequest, target: str, active_profile: str
     ) -> ActionDecision:
         parsed = urlparse(target)
         hostname = parsed.hostname or target
 
-        if self.profile == "dev_balanced":
+        if active_profile == "dev_balanced":
             return self._decision_allow(
                 request,
                 reason_code="POLICY_ALLOW",
                 human_reason="MVAR balanced profile allows HTTP request sink",
             )
 
-        if self.profile == "dev_strict":
+        if active_profile == "dev_strict":
             return self._decision_block(
                 request,
                 reason_code="DOMAIN_BLOCKED",
@@ -371,6 +513,9 @@ class MVARRuntime:
         return ["untrusted_input"]
 
     def _derive_trust_level(self, request: ActionRequest) -> str:
+        input_class = self._resolve_input_class(request)
+        if input_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}:
+            return "trusted"
         taint_level = str(request.prompt_provenance.get("taint_level", "")).lower()
         return "trusted" if taint_level == "trusted" else "untrusted"
 
@@ -388,7 +533,7 @@ class MVARRuntime:
             human_reason=human_reason,
             sink_type=request.sink_type,
             target=request.target,
-            policy_profile=self.profile,
+            policy_profile=request.policy_profile,
             engine="embedded-policy-v0.1",
             policy_id="mvar-embedded.v0.1",
             trust_level=self._derive_trust_level(request),
@@ -412,13 +557,39 @@ class MVARRuntime:
             human_reason=human_reason,
             sink_type=request.sink_type,
             target=request.target,
-            policy_profile=self.profile,
+            policy_profile=request.policy_profile,
             engine="embedded-policy-v0.1",
             policy_id="mvar-embedded.v0.1",
             trust_level=self._derive_trust_level(request),
             annotations={
                 "policy_rule_matched": request.sink_type,
                 "taint_markers": self._extract_taint_markers(request),
+            },
+        )
+
+    def _decision_annotate(
+        self,
+        request: ActionRequest,
+        *,
+        reason_code: str,
+        human_reason: str,
+        enforcement_action: str,
+    ) -> ActionDecision:
+        return ActionDecision(
+            request_id=request.request_id,
+            decision="annotate",
+            reason_code=reason_code,
+            human_reason=human_reason,
+            sink_type=request.sink_type,
+            target=request.target,
+            policy_profile=request.policy_profile,
+            engine="embedded-policy-v0.1",
+            policy_id="mvar-embedded.v0.1",
+            trust_level=self._derive_trust_level(request),
+            annotations={
+                "policy_rule_matched": request.sink_type,
+                "taint_markers": self._extract_taint_markers(request),
+                "enforcement_action": enforcement_action,
             },
         )
 
