@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass
-from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from clawzero.contracts import ActionRequest
 from clawzero.exceptions import ExecutionBlocked
@@ -337,4 +336,3 @@ def wrap_langchain_tool(
 ) -> Any:
     """Backward-compatible alias for protect_langchain_tool."""
     return protect_langchain_tool(tool=tool, sink=sink, profile=profile)
-
