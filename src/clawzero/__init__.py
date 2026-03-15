@@ -23,12 +23,17 @@ Example usage:
     content = safe_read("/workspace/data.txt")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 
 from clawzero.contracts import ActionDecision, ActionRequest
-from clawzero.adapters import OpenClawAdapter
+from clawzero.adapters import (
+    OpenClawAdapter,
+    LangChainAdapter,
+    protect_langchain_tool,
+    wrap_langchain_tool,
+)
 from clawzero.exceptions import (
     ClawZeroConfigError,
     ClawZeroError,
@@ -50,6 +55,9 @@ __all__ = [
     "protect",
     "MVARRuntime",
     "OpenClawAdapter",
+    "LangChainAdapter",
+    "protect_langchain_tool",
+    "wrap_langchain_tool",
     # Contracts
     "ActionRequest",
     "ActionDecision",

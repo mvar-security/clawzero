@@ -16,6 +16,7 @@ from pathlib import Path
 
 from clawzero.contracts import ActionRequest
 from clawzero.runtime import MVARRuntime
+from clawzero.sarif import export_sarif
 from clawzero.witnesses.verify import verify_witness_chain, verify_witness_file
 
 
@@ -145,6 +146,20 @@ def _cmd_witness_verify_chain(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_report_sarif(args: argparse.Namespace) -> int:
+    input_dir = Path(args.input)
+    output_file = Path(args.output)
+    try:
+        result = export_sarif(input_dir=input_dir, output_file=output_file)
+    except Exception as exc:
+        print(f"SARIF export failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"SARIF VALID ({result.result_count} results)")
+    print(f"Output: {result.output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="clawzero",
@@ -226,6 +241,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--scenario", choices=["shell", "credentials", "benign"], default="shell"
     )
     attack_replay.set_defaults(func=_cmd_attack_replay)
+
+    report = subparsers.add_parser(
+        "report",
+        help="Export enforcement artifacts into security report formats.",
+    )
+    report_sub = report.add_subparsers(dest="report_command", required=True)
+    report_sarif = report_sub.add_parser(
+        "sarif",
+        help="Export witness artifacts to SARIF 2.1.0 for GitHub Code Scanning.",
+    )
+    report_sarif.add_argument("--input", required=True, help="Directory containing witness JSON files.")
+    report_sarif.add_argument("--output", required=True, help="Output SARIF file path.")
+    report_sarif.set_defaults(func=_cmd_report_sarif)
 
     return parser
 

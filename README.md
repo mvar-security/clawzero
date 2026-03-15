@@ -61,6 +61,24 @@ MVAR-PROTECTED     →  BLOCKED ✓
 Witness generated  →  YES
 ```
 
+## LangChain Integration
+
+```python
+from clawzero.adapters.langchain import protect_langchain_tool
+
+safe_tool = protect_langchain_tool(
+    my_langchain_tool,
+    sink="filesystem.read",
+    profile="prod_locked",
+)
+```
+
+Run the packaged example:
+
+```bash
+python examples/langchain_integration.py
+```
+
 ## Why ClawZero?
 
 Autonomous AI agents frequently execute tool calls with high privileges.
@@ -132,8 +150,8 @@ The attack demonstrations show how enforcement works; they are not tools for per
   "target": "bash",
   "decision": "block",
   "reason_code": "UNTRUSTED_TO_CRITICAL_SINK",
-  "policy_id": "mvar-embedded.v0.1",
-  "engine": "embedded-policy-v0.1",
+  "policy_id": "mvar-security.v1.4.3",
+  "engine": "mvar-security",
   "provenance": {
     "source": "external_document",
     "taint_level": "untrusted",
@@ -145,7 +163,7 @@ The attack demonstrations show how enforcement works; they are not tools for per
     "mode": "event_intercept",
     "framework": "openclaw"
   },
-  "witness_signature": "ed25519_stub:abcd1234ef567890"
+  "witness_signature": "ed25519:d91fd8f73f3d05f8ec7b3d8e5e7cf2e27869a5f0f1ee3bd17da2df5ec41c9cb2a3c7e4f3540b4f7f4f948f0f185318273447bcb0adf24a4b2a1b53b7a1b2c90a"
 }
 ```
 
@@ -169,6 +187,7 @@ Command families map to enforcement jobs:
 - `clawzero witness` - inspect and validate witness artifacts
 - `clawzero audit` - evaluate deterministic decisions for sink requests
 - `clawzero attack` - replay known attack scenarios as enforcement proofs
+- `clawzero report` - export witness artifacts to SARIF for code scanning
 
 ## Zero-Config API
 

@@ -1,0 +1,35 @@
+name: ClawZero Security Scan
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ClawZero
+        run: pip install clawzero
+
+      - name: Run security scan
+        run: |
+          clawzero demo openclaw \
+            --mode compare \
+            --scenario shell \
+            --output-dir witnesses/
+          clawzero report sarif \
+            --input witnesses/ \
+            --output results.sarif
+
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
