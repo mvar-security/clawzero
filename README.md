@@ -75,6 +75,20 @@ MVAR-PROTECTED     →  BLOCKED ✓
 Witness generated  →  YES
 ```
 
+## Adapters
+
+OpenClaw adapter is included and works out of the box:
+
+```bash
+pip install clawzero
+```
+
+LangChain adapter code is included, and requires LangChain packages in your project:
+
+```bash
+pip install clawzero langchain langchain-openai
+```
+
 ## LangChain Integration
 
 ```python
