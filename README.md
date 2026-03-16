@@ -4,6 +4,8 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/mvar-security/clawzero/test.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](https://opensource.org/license/Apache-2.0)
 
+> Powered by MVAR: https://github.com/mvar-security/mvar
+
 <div align="center">
 
 <picture>
@@ -38,6 +40,18 @@ It works with any LLM, any OpenClaw agent, and any tool definition.
 </p>
 
 </div>
+
+**Execution boundary for OpenClaw agents. Powered by MVAR.**
+
+```bash
+pip install clawzero
+clawzero demo openclaw --mode compare --scenario shell
+```
+
+```text
+Standard OpenClaw -> COMPROMISED
+ClawZero -> BLOCKED ✓
+```
 
 Standard OpenClaw executes the attack.
 ClawZero blocks it deterministically.
@@ -222,6 +236,18 @@ MVAR governs the sink policy enforcement decisions.
 - Filed as provisional patent (February 24, 2026, 24 claims)
 - Submitted to NIST RFI Docket NIST-2025-0035
 - Published as preprint on SSRN (February 2026)
+
+## Early Release - Join Us
+
+This is early. The clawzero demo shows enforcement in harness + OpenClaw simulation.
+
+Real multi-turn agent testing is next.
+
+If you're running agents (LangChain, CrewAI, AutoGen, OpenClaw, etc.) and want to try it live:
+- DM @Shawndcohen on X
+- Open an issue with your setup/framework
+
+Happy to pair debug and share results.
 
 ## License
 
