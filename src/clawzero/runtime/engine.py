@@ -313,7 +313,7 @@ class MVARRuntime:
                 "enforcement_action": enforcement_action,
                 "taint_markers": self._extract_taint_markers(request),
             }
-            return ActionDecision(
+            decision = ActionDecision(
                 request_id=request.request_id,
                 decision=decision_value,
                 reason_code=str(getattr(result, "reason_code", "POLICY_ALLOW")),
@@ -329,6 +329,7 @@ class MVARRuntime:
                 trust_level="trusted" if trust_level == "trusted" else "untrusted",
                 annotations=annotations,
             )
+            return self._apply_tool_custom_compatibility(request, decision)
 
         if isinstance(result, ActionDecision):
             result.engine = "mvar-security"
@@ -341,7 +342,7 @@ class MVARRuntime:
             decision_value = str(result.get("decision", "allow")).lower()
             if decision_value not in {"allow", "block", "annotate"}:
                 return None
-            return ActionDecision(
+            decision = ActionDecision(
                 request_id=request.request_id,
                 decision=decision_value,
                 reason_code=str(result.get("reason_code", "POLICY_ALLOW")),
@@ -361,8 +362,38 @@ class MVARRuntime:
                     "taint_markers": self._extract_taint_markers(request),
                 },
             )
+            return self._apply_tool_custom_compatibility(request, decision)
 
         return None
+
+    def _apply_tool_custom_compatibility(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        """
+        Keep historical zero-config behavior stable for low-risk custom sinks.
+
+        Some mvar-security environments classify trusted `tool.custom` requests
+        as POLICY_BLOCK. ClawZero's public API and claims expect trusted benign
+        custom tool calls to pass unless explicitly elevated to a critical sink.
+        """
+        if request.sink_type != "tool.custom":
+            return decision
+
+        request_class = self._resolve_input_class(request)
+        if request_class not in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}:
+            return decision
+
+        if decision.decision != "block":
+            return decision
+
+        if decision.reason_code not in {"POLICY_BLOCK", "POLICY_DENY", "POLICY_REJECT"}:
+            return decision
+
+        decision.decision = "allow"
+        decision.reason_code = "POLICY_ALLOW"
+        decision.human_reason = "Trusted custom tool request allowed by ClawZero compatibility policy"
+        decision.annotations["compatibility_override"] = "trusted_tool_custom_allow"
+        return decision
 
     def _evaluate_embedded(self, request: ActionRequest) -> ActionDecision:
         sink_type = request.sink_type
