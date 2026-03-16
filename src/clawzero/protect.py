@@ -37,7 +37,7 @@ def protect(
     sink: str = "tool.custom",
     profile: str = "dev_balanced",
     framework: str = "python_tools",
-    input_class: InputClass | str = InputClass.UNTRUSTED,
+    input_class: InputClass | str = InputClass.PRE_AUTHORIZED,
 ) -> Callable:
     """
     Wrap a tool with ClawZero enforcement.
