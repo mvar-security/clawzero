@@ -32,13 +32,17 @@ class DoctorReport:
     runtime: DoctorCheck
     witness: DoctorCheck
     demo: DoctorCheck
+    exposure: DoctorCheck | None = None
     witness_signer: str = "unknown"
     ledger_signer: str = "unknown"
     ledger_signer_detail: str | None = None
 
     @property
     def secure(self) -> bool:
-        return all(check.status == "OK" for check in (self.runtime, self.witness, self.demo))
+        checks = [self.runtime, self.witness, self.demo]
+        if self.exposure is not None:
+            checks.append(self.exposure)
+        return all(check.status == "OK" for check in checks)
 
     @property
     def status(self) -> str:
@@ -128,6 +132,70 @@ def _sample_request(*, sink_type: str, target: str, input_class: InputClass, sou
     )
 
 
+def _exposure_check() -> DoctorCheck:
+    with _with_quiet_runtime_logs():
+        runtime = MVARRuntime(profile="dev_balanced", network_mode="localhost_only")
+
+    runtime._mvar_available = False
+    runtime._mvar_governor = None
+    runtime.engine = "embedded-policy-v0.1"
+    runtime.policy_id = "mvar-embedded.v0.1"
+
+    missing_auth = runtime.evaluate(
+        ActionRequest(
+            request_id=str(uuid.uuid4()),
+            framework="openclaw",
+            action_type="tool_call",
+            sink_type="websocket.connect",
+            tool_name="doctor_ws",
+            target="ws://localhost:8765/control",
+            arguments={"origin": "http://localhost:3000"},
+            input_class=InputClass.TRUSTED.value,
+            prompt_provenance={
+                "source": "user_request",
+                "taint_level": "trusted",
+                "source_chain": ["user_request", "doctor_check", "tool_call"],
+                "taint_markers": [],
+            },
+            policy_profile="dev_balanced",
+            metadata={},
+        )
+    )
+    if not (
+        missing_auth.decision == "block"
+        and missing_auth.reason_code == "MISSING_CONTROLPLANE_AUTH"
+    ):
+        return DoctorCheck("Exposure", "WARN", "websocket auth guard not enforced")
+
+    untrusted_origin = runtime.evaluate(
+        ActionRequest(
+            request_id=str(uuid.uuid4()),
+            framework="openclaw",
+            action_type="tool_call",
+            sink_type="websocket.connect",
+            tool_name="doctor_ws",
+            target="ws://localhost:8765/control",
+            arguments={"origin": "https://attacker.example", "auth_token": "doctor-token"},
+            input_class=InputClass.UNTRUSTED.value,
+            prompt_provenance={
+                "source": "external_document",
+                "taint_level": "untrusted",
+                "source_chain": ["external_document", "doctor_check", "tool_call"],
+                "taint_markers": ["external_content"],
+            },
+            policy_profile="dev_balanced",
+            metadata={},
+        )
+    )
+    if not (
+        untrusted_origin.decision == "block"
+        and untrusted_origin.reason_code == "UNTRUSTED_WEBSOCKET_ORIGIN"
+    ):
+        return DoctorCheck("Exposure", "WARN", "websocket origin guard not enforced")
+
+    return DoctorCheck("Exposure", "OK", "control-plane guards active")
+
+
 def _witness_check(witness_dir: Path) -> DoctorCheck:
     witness_dir.mkdir(parents=True, exist_ok=True)
     with _with_quiet_runtime_logs():
@@ -188,10 +256,12 @@ def run_openclaw_doctor(work_dir: Path | None = None) -> DoctorReport:
     signer_info = runtime_probe.signer_info()
     witness = _witness_check(work_dir / "witness_check")
     demo = _demo_check(work_dir / "demo_check")
+    exposure = _exposure_check()
     return DoctorReport(
         runtime=runtime,
         witness=witness,
         demo=demo,
+        exposure=exposure,
         witness_signer=str(signer_info["witness_signer"]),
         ledger_signer=str(signer_info["ledger_signer"]),
         ledger_signer_detail=(
@@ -214,6 +284,7 @@ def format_openclaw_doctor(report: DoctorReport) -> str:
         _format_line(report.runtime),
         _format_line(report.witness),
         _format_line(report.demo),
+        *([_format_line(report.exposure)] if report.exposure else []),
         "",
         f"Witness signer:  {report.witness_signer}",
         f"Ledger signer:   {report.ledger_signer}",

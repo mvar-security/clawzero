@@ -65,3 +65,19 @@ def test_doctor_chain_invalid(monkeypatch, capsys) -> None:
     assert rc == 1
     assert "Witness......... INVALID (previous_hash mismatch at index 2)" in out
     assert "Status: WARNINGS (see above)" in out
+
+
+def test_doctor_exposure_line_rendered(monkeypatch, capsys) -> None:
+    report = _report(
+        DoctorCheck("Runtime", "OK", "mvar-security 1.4.3"),
+        DoctorCheck("Witness", "OK", "chain valid"),
+        DoctorCheck("Demo", "OK", "attack blocked"),
+    )
+    report.exposure = DoctorCheck("Exposure", "OK", "control-plane guards active")
+    monkeypatch.setattr(cli, "run_openclaw_doctor", lambda: report)
+
+    rc = cli.main(["doctor", "openclaw"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "Exposure........ OK (control-plane guards active)" in out

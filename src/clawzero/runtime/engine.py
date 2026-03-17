@@ -30,10 +30,20 @@ class MVARRuntime:
         profile: str = "dev_balanced",
         witness_dir: Optional[Path] = None,
         cec_enforce: bool = False,
+        network_mode: str = "unrestricted",
+        network_allowlist: Optional[list[str]] = None,
+        trusted_websocket_origins: Optional[list[str]] = None,
+        require_controlplane_auth: bool = True,
     ):
         self.profile = profile
         self.witness_dir = witness_dir
         self.cec_enforce = cec_enforce
+        self.network_mode = self._normalize_network_mode(network_mode)
+        self.network_allowlist = self._normalize_host_set(network_allowlist or [])
+        self.trusted_websocket_origins = self._normalize_host_set(
+            trusted_websocket_origins or []
+        )
+        self.require_controlplane_auth = require_controlplane_auth
         self.last_witness: Optional[dict[str, Any]] = None
         self._cec_state = {
             "has_private_data": False,
@@ -74,6 +84,8 @@ class MVARRuntime:
             "witness_signer": signer["witness_signer"],
             "ledger_signer": signer["ledger_signer"],
             "ledger_signer_detail": signer["ledger_signer_detail"],
+            "network_mode": self.network_mode,
+            "network_allowlist": sorted(self.network_allowlist),
         }
 
     def signer_info(self) -> dict[str, str | None]:
@@ -180,6 +192,7 @@ class MVARRuntime:
             "shell.exec": "block",
             "filesystem.read": "profile_sensitive",
             "http.request": "profile_exfil",
+            "websocket.connect": "controlplane_guarded",
             "credentials.access": "block",
         }
 
@@ -205,9 +218,12 @@ class MVARRuntime:
                 decision = self._evaluate_embedded(prepared_request)
             decision.annotations["cec_escalated_profile"] = "prod_locked"
 
+        decision = self._apply_control_plane_guards(prepared_request, decision)
         decision.annotations["input_class"] = prepared_request.input_class
         decision.annotations["effective_policy_profile"] = prepared_request.policy_profile
         decision.annotations["cec_status"] = cec_status
+        decision.annotations["network_mode"] = self.network_mode
+        decision.annotations["network_allowlist"] = sorted(self.network_allowlist)
 
         self.last_witness = generate_witness(prepared_request, decision)
         return decision
@@ -300,7 +316,187 @@ class MVARRuntime:
         return any(token in target for token in sensitive_tokens)
 
     def _is_exfil_capability_sink(self, request: ActionRequest) -> bool:
-        return request.sink_type in {"http.request", "filesystem.write", "shell.exec"}
+        return request.sink_type in {
+            "http.request",
+            "filesystem.write",
+            "shell.exec",
+            "websocket.connect",
+        }
+
+    @staticmethod
+    def _normalize_network_mode(network_mode: str) -> str:
+        value = str(network_mode or "unrestricted").strip().lower()
+        allowed = {"unrestricted", "localhost_only", "allowlist_only"}
+        if value not in allowed:
+            raise ClawZeroConfigError(
+                f"Unknown network mode: {network_mode}. Expected one of {sorted(allowed)}"
+            )
+        return value
+
+    def _normalize_host_set(self, values: list[str]) -> set[str]:
+        hosts: set[str] = set()
+        for value in values:
+            host = self._extract_hostname(str(value))
+            if host:
+                hosts.add(host)
+        return hosts
+
+    def _extract_hostname(self, value: str | None) -> Optional[str]:
+        if value is None:
+            return None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        parsed = urlparse(raw)
+        host = parsed.hostname
+        if host:
+            return host.lower()
+        parsed = urlparse(f"//{raw}")
+        if parsed.hostname:
+            return str(parsed.hostname).lower()
+        base = raw.split("/", 1)[0]
+        if ":" in base and base.count(":") == 1:
+            base = base.split(":", 1)[0]
+        return base.lower() if base else None
+
+    @staticmethod
+    def _is_localhost(hostname: str | None) -> bool:
+        return str(hostname or "").lower() in {"localhost", "127.0.0.1", "::1"}
+
+    def _is_host_allowed_by_network_mode(self, hostname: str | None) -> bool:
+        if self.network_mode == "unrestricted":
+            return True
+        if hostname is None:
+            return False
+        if self.network_mode == "localhost_only":
+            return self._is_localhost(hostname)
+        return hostname in self.network_allowlist
+
+    def _extract_origin(self, request: ActionRequest) -> Optional[str]:
+        for key in ("origin", "ws_origin", "websocket_origin"):
+            value = request.arguments.get(key)
+            if value:
+                return str(value)
+
+        headers = request.arguments.get("headers")
+        if isinstance(headers, dict):
+            for key in ("origin", "Origin"):
+                if headers.get(key):
+                    return str(headers[key])
+
+        for key in ("origin", "ws_origin", "websocket_origin"):
+            value = request.metadata.get(key)
+            if value:
+                return str(value)
+
+        return None
+
+    def _has_controlplane_auth(self, request: ActionRequest) -> bool:
+        auth_keys = {
+            "auth",
+            "auth_token",
+            "authorization",
+            "token",
+            "api_key",
+            "session_token",
+            "bearer",
+        }
+        for key in auth_keys:
+            value = request.arguments.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+
+        headers = request.arguments.get("headers")
+        if isinstance(headers, dict):
+            for key in ("authorization", "Authorization", "x-api-key", "X-API-Key"):
+                value = headers.get(key)
+                if isinstance(value, str) and value.strip():
+                    return True
+
+        for key in auth_keys:
+            value = request.metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+
+        return False
+
+    def _is_trusted_websocket_origin(self, origin: Optional[str]) -> bool:
+        host = self._extract_hostname(origin)
+        if host is None:
+            return False
+        if self.trusted_websocket_origins:
+            return host in self.trusted_websocket_origins
+        if self.network_mode == "allowlist_only":
+            return host in self.network_allowlist
+        if self.network_mode == "localhost_only":
+            return self._is_localhost(host)
+        # In unrestricted mode, untrusted websocket origins are still bounded.
+        return self._is_localhost(host)
+
+    def _override_block_decision(
+        self,
+        request: ActionRequest,
+        decision: ActionDecision,
+        *,
+        reason_code: str,
+        human_reason: str,
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["control_plane_guard"] = True
+        annotations["guard_reason_code"] = reason_code
+        return ActionDecision(
+            request_id=request.request_id,
+            decision="block",
+            reason_code=reason_code,
+            human_reason=human_reason,
+            sink_type=request.sink_type,
+            target=request.target,
+            policy_profile=request.policy_profile,
+            engine=decision.engine,
+            policy_id=decision.policy_id,
+            trust_level=decision.trust_level or self._derive_trust_level(request),
+            witness_id=decision.witness_id,
+            annotations=annotations,
+        )
+
+    def _apply_control_plane_guards(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        if decision.is_blocked():
+            return decision
+
+        if request.sink_type == "websocket.connect":
+            if self.require_controlplane_auth and not self._has_controlplane_auth(request):
+                return self._override_block_decision(
+                    request,
+                    decision,
+                    reason_code="MISSING_CONTROLPLANE_AUTH",
+                    human_reason="Control-plane websocket requires explicit auth",
+                )
+
+            if self._resolve_input_class(request) == InputClass.UNTRUSTED:
+                origin = self._extract_origin(request)
+                if not self._is_trusted_websocket_origin(origin):
+                    return self._override_block_decision(
+                        request,
+                        decision,
+                        reason_code="UNTRUSTED_WEBSOCKET_ORIGIN",
+                        human_reason="Untrusted websocket origin cannot reach control-plane sink",
+                    )
+
+        if request.sink_type in {"http.request", "websocket.connect"}:
+            target_host = self._extract_hostname(request.target)
+            if not self._is_host_allowed_by_network_mode(target_host):
+                return self._override_block_decision(
+                    request,
+                    decision,
+                    reason_code="NETWORK_ISOLATION_VIOLATION",
+                    human_reason=(
+                        f"Network mode '{self.network_mode}' blocked host '{target_host or 'unknown'}'"
+                    ),
+                )
+
+        return decision
 
     def _evaluate_via_mvar(self, request: ActionRequest) -> ActionDecision:
         """
