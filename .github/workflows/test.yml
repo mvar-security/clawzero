@@ -7,11 +7,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - name: Checkout
@@ -34,7 +35,7 @@ jobs:
         run: mypy --ignore-missing-imports src/clawzero
 
       - name: Pytest
-        run: pytest tests/test_claims.py -v
+        run: pytest -q
 
   release-gate:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -51,7 +52,7 @@ jobs:
           python3 -m venv /tmp/gate_test
           source /tmp/gate_test/bin/activate
           python -m pip install --upgrade pip
-          pip install clawzero==0.1.3
+          pip install clawzero==0.1.4
 
           clawzero doctor openclaw | tee /tmp/doctor.out
           grep -q "Status: SECURE" /tmp/doctor.out
@@ -59,3 +60,33 @@ jobs:
           clawzero demo openclaw --mode compare --scenario shell | tee /tmp/demo.out
           grep -q "MVAR-PROTECTED OPENCLAW" /tmp/demo.out
           grep -q "RESULT: ATTACK BLOCKED ✓" /tmp/demo.out
+
+  download-smoke:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download smoke test from PyPI
+        run: |
+          python3 -m venv /tmp/download_smoke
+          source /tmp/download_smoke/bin/activate
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir clawzero==0.1.4
+
+          clawzero doctor openclaw | tee /tmp/doctor.out
+          grep -q "Status: SECURE" /tmp/doctor.out
+          grep -q "Witness signer:  Ed25519 (QSEAL) ✓" /tmp/doctor.out
+          grep -q "Ledger signer:   HMAC fallback" /tmp/doctor.out
+
+          clawzero demo openclaw --mode compare --scenario shell | tee /tmp/demo.out
+          grep -q "MVAR-Protected      →  BLOCKED ✓" /tmp/demo.out
+          grep -q "Policy:  mvar-security.v1.4.3" /tmp/demo.out
