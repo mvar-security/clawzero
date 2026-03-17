@@ -253,6 +253,12 @@ def _print_mvar(
     print(f"  Policy:  {decision.policy_id}")
     if decision.decision == "block":
         print(f"  Reason:  {decision.reason_code}")
+    print()
+    signer_info = runtime.signer_info()
+    print(f"Witness signer:  {signer_info['witness_signer']}")
+    print(f"Ledger signer:   {signer_info['ledger_signer']}")
+    if signer_info["ledger_signer_detail"]:
+        print(f"  {signer_info['ledger_signer_detail']}")
 
     print()
     print(BANNER)

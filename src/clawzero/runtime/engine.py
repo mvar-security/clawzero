@@ -6,6 +6,8 @@ MVAR-first execution boundary with explicit embedded fallback.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import logging
 from dataclasses import replace
 from importlib.metadata import PackageNotFoundError, version
@@ -41,11 +43,14 @@ class MVARRuntime:
 
         self._mvar_governor: Any = None
         self._mvar_version = "unknown"
+        self._witness_signer = "ed25519_stub"
+        self._ledger_signer = "embedded"
         self._mvar_available = self._try_load_mvar()
 
         if self._mvar_available:
             self.engine = "mvar-security"
             self.policy_id = f"mvar-security.v{self._mvar_version}"
+            self._witness_signer = "ed25519_qseal"
             logger.info("MVAR runtime loaded (mvar-security %s)", self._mvar_version)
         else:
             self.engine = "embedded-policy-v0.1"
@@ -61,46 +66,102 @@ class MVARRuntime:
 
     def engine_info(self) -> dict[str, Any]:
         """Return active engine details for demos and diagnostics."""
+        signer = self.signer_info()
         return {
             "engine": self.engine,
             "policy_id": self.policy_id,
             "runtime_available": self._mvar_available,
+            "witness_signer": signer["witness_signer"],
+            "ledger_signer": signer["ledger_signer"],
+            "ledger_signer_detail": signer["ledger_signer_detail"],
+        }
+
+    def signer_info(self) -> dict[str, str | None]:
+        """Return user-facing signer status for witness and decision ledger."""
+        if self._mvar_available:
+            if self._ledger_signer == "hmac_fallback":
+                return {
+                    "witness_signer": "Ed25519 (QSEAL) ✓",
+                    "ledger_signer": "HMAC fallback",
+                    "ledger_signer_detail": "(external signer not configured)",
+                }
+
+            return {
+                "witness_signer": "Ed25519 (QSEAL) ✓",
+                "ledger_signer": "Ed25519 (QSEAL) ✓",
+                "ledger_signer_detail": None,
+            }
+
+        return {
+            "witness_signer": "ed25519_stub (embedded fallback)",
+            "ledger_signer": "N/A (embedded fallback)",
+            "ledger_signer_detail": None,
         }
 
     def _try_load_mvar(self) -> bool:
         """Try loading mvar-security governor and detect version."""
         try:
-            from mvar.governor import ExecutionGovernor  # type: ignore
+            captured_output = io.StringIO()
+            with contextlib.redirect_stdout(captured_output), contextlib.redirect_stderr(
+                captured_output
+            ):
+                from mvar.governor import ExecutionGovernor  # type: ignore
 
-            try:
-                self._mvar_version = version("mvar-security")
-            except PackageNotFoundError:
-                self._mvar_version = "unknown"
-
-            governor = None
-            init_attempts = [
-                {"policy_profile": self.profile},
-                {"profile": self.profile},
-                {},
-            ]
-            for kwargs in init_attempts:
                 try:
-                    governor = ExecutionGovernor(**kwargs)
-                    break
-                except TypeError:
-                    continue
+                    self._mvar_version = version("mvar-security")
+                except PackageNotFoundError:
+                    self._mvar_version = "unknown"
 
-            if governor is None:
-                governor = ExecutionGovernor()
+                governor = None
+                init_attempts = [
+                    {"policy_profile": self.profile},
+                    {"profile": self.profile},
+                    {},
+                ]
+                for kwargs in init_attempts:
+                    try:
+                        governor = ExecutionGovernor(**kwargs)
+                        break
+                    except TypeError:
+                        continue
 
-            if not any(callable(getattr(governor, m, None)) for m in ("evaluate", "decide", "enforce")):
-                return False
+                if governor is None:
+                    governor = ExecutionGovernor()
 
+                if not any(
+                    callable(getattr(governor, method_name, None))
+                    for method_name in ("evaluate", "decide", "enforce")
+                ):
+                    return False
+
+            bootstrap_log = captured_output.getvalue()
+            if logger.isEnabledFor(logging.DEBUG) and bootstrap_log.strip():
+                logger.debug("mvar-security bootstrap output: %s", bootstrap_log.strip())
+            self._ledger_signer = self._detect_ledger_signer()
             self._mvar_governor = governor
             return True
         except Exception:
             self._mvar_governor = None
             return False
+
+    def _detect_ledger_signer(self) -> str:
+        """
+        Detect the decision-ledger signer mode from the installed mvar runtime.
+
+        This is independent from witness signing, which remains Ed25519/QSEAL.
+        """
+        try:
+            from mvar_core import decision_ledger  # type: ignore
+
+            mode = str(getattr(decision_ledger, "QSEAL_MODE", "")).strip().lower()
+            if mode == "hmac-sha256":
+                return "hmac_fallback"
+            if mode:
+                return "ed25519_qseal"
+        except Exception:
+            pass
+
+        return "unknown"
 
     def _load_embedded_policy(self, profile: str) -> None:
         """

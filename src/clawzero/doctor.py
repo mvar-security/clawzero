@@ -7,9 +7,10 @@ import re
 import tempfile
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
+import io
 from pathlib import Path
 
 from clawzero.contracts import ActionRequest, InputClass
@@ -31,6 +32,9 @@ class DoctorReport:
     runtime: DoctorCheck
     witness: DoctorCheck
     demo: DoctorCheck
+    witness_signer: str = "unknown"
+    ledger_signer: str = "unknown"
+    ledger_signer_detail: str | None = None
 
     @property
     def secure(self) -> bool:
@@ -68,7 +72,9 @@ def _runtime_check(minimum_version: str = MIN_MVAR_VERSION) -> DoctorCheck:
         )
 
     try:
-        from mvar.governor import ExecutionGovernor
+        captured = io.StringIO()
+        with redirect_stdout(captured), redirect_stderr(captured):
+            from mvar.governor import ExecutionGovernor
 
         _ = ExecutionGovernor
     except Exception:
@@ -177,9 +183,23 @@ def run_openclaw_doctor(work_dir: Path | None = None) -> DoctorReport:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     runtime = _runtime_check()
+    with _with_quiet_runtime_logs():
+        runtime_probe = MVARRuntime(profile="prod_locked")
+    signer_info = runtime_probe.signer_info()
     witness = _witness_check(work_dir / "witness_check")
     demo = _demo_check(work_dir / "demo_check")
-    return DoctorReport(runtime=runtime, witness=witness, demo=demo)
+    return DoctorReport(
+        runtime=runtime,
+        witness=witness,
+        demo=demo,
+        witness_signer=str(signer_info["witness_signer"]),
+        ledger_signer=str(signer_info["ledger_signer"]),
+        ledger_signer_detail=(
+            str(signer_info["ledger_signer_detail"])
+            if signer_info["ledger_signer_detail"] is not None
+            else None
+        ),
+    )
 
 
 def _format_line(check: DoctorCheck) -> str:
@@ -194,6 +214,10 @@ def format_openclaw_doctor(report: DoctorReport) -> str:
         _format_line(report.runtime),
         _format_line(report.witness),
         _format_line(report.demo),
+        "",
+        f"Witness signer:  {report.witness_signer}",
+        f"Ledger signer:   {report.ledger_signer}",
+        *( [f"  {report.ledger_signer_detail}"] if report.ledger_signer_detail else [] ),
         "",
         f"Status: {report.status}",
     ]
