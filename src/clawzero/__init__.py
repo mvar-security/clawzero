@@ -23,7 +23,7 @@ Example usage:
     content = safe_read("/workspace/data.txt")
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 
