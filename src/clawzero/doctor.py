@@ -45,7 +45,8 @@ def _parse_version(raw_version: str) -> tuple[int, int, int] | None:
     match = re.match(r"^\s*(\d+)\.(\d+)\.(\d+)", raw_version)
     if match is None:
         return None
-    return tuple(int(part) for part in match.groups())
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch)
 
 
 def _runtime_check(minimum_version: str = MIN_MVAR_VERSION) -> DoctorCheck:

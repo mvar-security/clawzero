@@ -9,6 +9,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
@@ -34,3 +35,27 @@ jobs:
 
       - name: Pytest
         run: pytest tests/test_claims.py -v
+
+  release-gate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Fresh install release gate
+        run: |
+          python3 -m venv /tmp/gate_test
+          source /tmp/gate_test/bin/activate
+          python -m pip install --upgrade pip
+          pip install clawzero==0.1.3
+
+          clawzero doctor openclaw | tee /tmp/doctor.out
+          grep -q "Status: SECURE" /tmp/doctor.out
+
+          clawzero demo openclaw --mode compare --scenario shell | tee /tmp/demo.out
+          grep -q "MVAR-PROTECTED OPENCLAW" /tmp/demo.out
+          grep -q "RESULT: ATTACK BLOCKED ✓" /tmp/demo.out
