@@ -390,7 +390,7 @@ class MVARRuntime:
                 trust_level="trusted" if trust_level == "trusted" else "untrusted",
                 annotations=annotations,
             )
-            return self._apply_tool_custom_compatibility(request, decision)
+            return self._apply_mvar_compatibility_overrides(request, decision)
 
         if isinstance(result, ActionDecision):
             result.engine = "mvar-security"
@@ -423,37 +423,59 @@ class MVARRuntime:
                     "taint_markers": self._extract_taint_markers(request),
                 },
             )
-            return self._apply_tool_custom_compatibility(request, decision)
+            return self._apply_mvar_compatibility_overrides(request, decision)
 
         return None
 
-    def _apply_tool_custom_compatibility(
+    def _apply_mvar_compatibility_overrides(
         self, request: ActionRequest, decision: ActionDecision
     ) -> ActionDecision:
         """
-        Keep historical zero-config behavior stable for low-risk custom sinks.
-
-        Some mvar-security environments classify trusted `tool.custom` requests
-        as POLICY_BLOCK. ClawZero's public API and claims expect trusted benign
-        custom tool calls to pass unless explicitly elevated to a critical sink.
+        Keep historical ClawZero behavior stable when MVAR policies are stricter.
         """
-        if request.sink_type != "tool.custom":
-            return decision
-
-        request_class = self._resolve_input_class(request)
-        if request_class not in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}:
-            return decision
-
         if decision.decision != "block":
             return decision
 
         if decision.reason_code not in {"POLICY_BLOCK", "POLICY_DENY", "POLICY_REJECT"}:
             return decision
 
-        decision.decision = "allow"
-        decision.reason_code = "POLICY_ALLOW"
-        decision.human_reason = "Trusted custom tool request allowed by ClawZero compatibility policy"
-        decision.annotations["compatibility_override"] = "trusted_tool_custom_allow"
+        request_class = self._resolve_input_class(request)
+
+        if (
+            request.sink_type == "tool.custom"
+            and request_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+        ):
+            decision.decision = "allow"
+            decision.reason_code = "POLICY_ALLOW"
+            decision.human_reason = (
+                "Trusted custom tool request allowed by ClawZero compatibility policy"
+            )
+            decision.annotations["compatibility_override"] = "trusted_tool_custom_allow"
+            return decision
+
+        if request.sink_type == "tool.custom" and request.policy_profile == "dev_balanced":
+            decision.decision = "annotate"
+            decision.reason_code = "STEP_UP_REQUIRED"
+            decision.human_reason = (
+                "ClawZero compatibility policy requires step-up review for untrusted custom sink"
+            )
+            decision.annotations["enforcement_action"] = "block_until_approved"
+            decision.annotations["compatibility_override"] = "dev_balanced_tool_custom_step_up"
+            return decision
+
+        if (
+            request.sink_type == "filesystem.read"
+            and request.policy_profile == "prod_locked"
+            and request_class in {InputClass.TRUSTED, InputClass.PRE_AUTHORIZED}
+            and str(request.target or "").startswith("/workspace/project/")
+        ):
+            decision.decision = "allow"
+            decision.reason_code = "ALLOWLIST_MATCH"
+            decision.human_reason = (
+                "Trusted workspace read allowed by ClawZero compatibility policy"
+            )
+            decision.annotations["compatibility_override"] = "prod_locked_workspace_read_allow"
+
         return decision
 
     def _evaluate_embedded(self, request: ActionRequest) -> ActionDecision:
