@@ -453,7 +453,11 @@ class MVARRuntime:
             decision.annotations["compatibility_override"] = "trusted_tool_custom_allow"
             return decision
 
-        if request.sink_type == "tool.custom" and request.policy_profile == "dev_balanced":
+        if (
+            request.sink_type == "tool.custom"
+            and request.policy_profile in {"dev_balanced", "dev_strict"}
+            and request_class == InputClass.UNTRUSTED
+        ):
             decision.decision = "annotate"
             decision.reason_code = "STEP_UP_REQUIRED"
             decision.human_reason = (
