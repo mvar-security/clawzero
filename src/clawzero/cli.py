@@ -306,6 +306,19 @@ def _cmd_witness_explain(args: argparse.Namespace) -> int:
     print(f"  integrity:   {integrity}")
     print(f"  sink risk:   {_sink_risk(sink_type)}")
     print(f"  rule fired:  {rule_fired}")
+    temporal = witness.get("temporal_taint_status", {})
+    if isinstance(temporal, dict) and temporal:
+        delayed = "YES" if temporal.get("delayed_trigger_detected") else "NO"
+        print(
+            "  temporal:    "
+            f"age={temporal.get('taint_age_hours', 0.0)}h delayed={delayed}"
+        )
+    budget = witness.get("budget_status", {})
+    if isinstance(budget, dict) and budget.get("enabled"):
+        print(
+            "  budget:      "
+            f"calls={budget.get('calls_total', 0)} cost=${budget.get('cost_total_usd', 0.0)}"
+        )
     print("")
     print("Decision")
     print(f"  {_decision_symbol(str(witness.get('decision', 'annotate')).lower())}")
@@ -363,12 +376,21 @@ def _cmd_replay(args: argparse.Namespace) -> int:
         sink = str(witness.get("sink_type", "unknown_sink"))
         target = str(witness.get("target", "unknown_target"))
         reason = str(witness.get("reason_code", "unknown_reason"))
+        temporal = witness.get("temporal_taint_status", {})
+        if not isinstance(temporal, dict):
+            temporal = {}
 
         print(f"Step {idx}  [index {index_label}]")
         print(f"  Input: {taint} ({source})")
         print(f"  Tool call: {sink}")
         print(f"  Target: {target}")
         print(f"  Rule: {reason}")
+        if temporal:
+            delayed = "YES" if temporal.get("delayed_trigger_detected") else "NO"
+            print(
+                "  Temporal: "
+                f"age={temporal.get('taint_age_hours', 0.0)}h delayed={delayed}"
+            )
         print(f"  Decision: {_decision_symbol(decision)}")
         print("")
 

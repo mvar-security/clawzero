@@ -34,6 +34,8 @@ class WitnessGenerator:
         taint_markers = self._extract_taint_markers(request, decision)
         cec_status = self._extract_cec_status(decision)
         package_trust = self._extract_package_trust(request, decision)
+        temporal_taint_status = self._extract_temporal_taint_status(decision)
+        budget_status = self._extract_budget_status(decision)
 
         adapter_metadata = request.metadata.get(
             "adapter",
@@ -64,6 +66,12 @@ class WitnessGenerator:
             "input_class": str(request.input_class),
             "cec_status": cec_status,
             "package_trust": package_trust,
+            "temporal_taint_status": temporal_taint_status,
+            "delayed_trigger_detected": bool(
+                temporal_taint_status.get("delayed_trigger_detected", False)
+            ),
+            "taint_age_hours": temporal_taint_status.get("taint_age_hours", 0.0),
+            "budget_status": budget_status,
             "witness_signature": self._sign(witness_id, request, decision),
             "engine": decision.engine,
             "adapter": adapter_metadata,
@@ -182,6 +190,55 @@ class WitnessGenerator:
         package_trust.setdefault("policy_reason", decision.reason_code)
         package_trust.setdefault("policy_decision", decision.decision)
         return package_trust
+
+    @staticmethod
+    def _extract_temporal_taint_status(decision: ActionDecision) -> dict[str, Any]:
+        fallback = {
+            "mode": "warn",
+            "threshold_hours": 24.0,
+            "first_seen_timestamp": None,
+            "last_propagated_timestamp": None,
+            "taint_age_hours": 0.0,
+            "has_memory_trace": False,
+            "delayed_trigger_detected": False,
+        }
+        raw = decision.annotations.get("temporal_taint_status")
+        if not isinstance(raw, dict):
+            return fallback
+
+        status = dict(raw)
+        for key, value in fallback.items():
+            status.setdefault(key, value)
+        return status
+
+    @staticmethod
+    def _extract_budget_status(decision: ActionDecision) -> dict[str, Any]:
+        fallback = {
+            "enabled": False,
+            "charging_policy": "SUCCESS_BASED",
+            "charge_applied": False,
+            "request_cost_usd": 0.0,
+            "calls_total": 0,
+            "calls_for_sink": 0,
+            "cost_total_usd": 0.0,
+            "limits": {
+                "max_cost_usd": None,
+                "max_calls_per_window": None,
+                "max_calls_per_sink": None,
+            },
+            "exceeded_limits": [],
+        }
+        raw = decision.annotations.get("budget_status")
+        if not isinstance(raw, dict):
+            return fallback
+        status = dict(raw)
+        for key, value in fallback.items():
+            status.setdefault(key, value)
+        if not isinstance(status.get("limits"), dict):
+            status["limits"] = dict(fallback["limits"])
+        if not isinstance(status.get("exceeded_limits"), list):
+            status["exceeded_limits"] = []
+        return status
 
     def _sign(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision

@@ -10,6 +10,7 @@ import contextlib
 import io
 import logging
 from dataclasses import replace
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Optional
@@ -35,6 +36,14 @@ class MVARRuntime:
         trusted_websocket_origins: Optional[list[str]] = None,
         require_controlplane_auth: bool = True,
         trusted_publishers: Optional[list[str]] = None,
+        temporal_taint_mode: str = "warn",
+        delayed_taint_threshold_hours: float = 24.0,
+        budget_max_cost_usd: Optional[float] = None,
+        budget_max_calls_per_window: Optional[int] = None,
+        budget_max_calls_per_sink: Optional[int] = None,
+        budget_window_seconds: int = 3600,
+        budget_charging_policy: str = "SUCCESS_BASED",
+        budget_default_cost_usd: float = 0.0,
     ):
         self.profile = profile
         self.witness_dir = witness_dir
@@ -46,11 +55,38 @@ class MVARRuntime:
         )
         self.require_controlplane_auth = require_controlplane_auth
         self.trusted_publishers = self._normalize_identity_set(trusted_publishers or [])
+        self.temporal_taint_mode = self._normalize_temporal_taint_mode(temporal_taint_mode)
+        self.delayed_taint_threshold_hours = max(float(delayed_taint_threshold_hours), 0.0)
+        self.budget_max_cost_usd = (
+            float(budget_max_cost_usd) if budget_max_cost_usd is not None else None
+        )
+        self.budget_max_calls_per_window = (
+            int(budget_max_calls_per_window)
+            if budget_max_calls_per_window is not None
+            else None
+        )
+        self.budget_max_calls_per_sink = (
+            int(budget_max_calls_per_sink)
+            if budget_max_calls_per_sink is not None
+            else None
+        )
+        self.budget_window_seconds = max(int(budget_window_seconds), 1)
+        self.budget_charging_policy = self._normalize_budget_charging_policy(
+            budget_charging_policy
+        )
+        self.budget_default_cost_usd = max(float(budget_default_cost_usd), 0.0)
         self.last_witness: Optional[dict[str, Any]] = None
         self._cec_state = {
             "has_private_data": False,
             "has_untrusted_input": False,
             "has_exfil_capability": False,
+        }
+        self._temporal_taint_state: dict[str, dict[str, datetime]] = {}
+        self._budget_state: dict[str, Any] = {
+            "window_start": datetime.now(timezone.utc),
+            "calls_total": 0,
+            "calls_per_sink": {},
+            "cost_total_usd": 0.0,
         }
 
         self._mvar_governor: Any = None
@@ -89,6 +125,10 @@ class MVARRuntime:
             "network_mode": self.network_mode,
             "network_allowlist": sorted(self.network_allowlist),
             "trusted_publishers": sorted(self.trusted_publishers),
+            "temporal_taint_mode": self.temporal_taint_mode,
+            "delayed_taint_threshold_hours": self.delayed_taint_threshold_hours,
+            "budget_enabled": self._budget_enforcement_enabled(),
+            "budget_charging_policy": self.budget_charging_policy,
         }
 
     def signer_info(self) -> dict[str, str | None]:
@@ -223,6 +263,8 @@ class MVARRuntime:
 
         decision = self._apply_control_plane_guards(prepared_request, decision)
         decision = self._apply_package_trust_guards(prepared_request, decision)
+        decision = self._apply_temporal_taint_guards(prepared_request, decision)
+        decision = self._apply_budget_guards(prepared_request, decision)
         decision.annotations["input_class"] = prepared_request.input_class
         decision.annotations["effective_policy_profile"] = prepared_request.policy_profile
         decision.annotations["cec_status"] = cec_status
@@ -334,6 +376,26 @@ class MVARRuntime:
         if value not in allowed:
             raise ClawZeroConfigError(
                 f"Unknown network mode: {network_mode}. Expected one of {sorted(allowed)}"
+            )
+        return value
+
+    @staticmethod
+    def _normalize_temporal_taint_mode(mode: str) -> str:
+        value = str(mode or "warn").strip().lower()
+        allowed = {"warn", "enforce"}
+        if value not in allowed:
+            raise ClawZeroConfigError(
+                f"Unknown temporal taint mode: {mode}. Expected one of {sorted(allowed)}"
+            )
+        return value
+
+    @staticmethod
+    def _normalize_budget_charging_policy(policy: str) -> str:
+        value = str(policy or "SUCCESS_BASED").strip().upper()
+        allowed = {"SUCCESS_BASED", "ATTEMPT_BASED"}
+        if value not in allowed:
+            raise ClawZeroConfigError(
+                f"Unknown budget charging policy: {policy}. Expected one of {sorted(allowed)}"
             )
         return value
 
@@ -642,6 +704,300 @@ class MVARRuntime:
                 reason_code="UNKNOWN_PUBLISHER_STEP_UP",
                 human_reason="Unknown marketplace publisher requires step-up approval",
                 enforcement_action="block_until_approved",
+            )
+
+        return decision
+
+    @staticmethod
+    def _parse_iso_timestamp(value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        normalized = text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _format_iso_timestamp(value: datetime) -> str:
+        return value.astimezone(timezone.utc).isoformat()
+
+    def _temporal_taint_key(self, request: ActionRequest) -> str:
+        provenance = request.prompt_provenance
+        custom_key = self._optional_text(provenance.get("taint_id"))
+        if custom_key:
+            return custom_key
+        source_chain = provenance.get("source_chain")
+        if isinstance(source_chain, list) and source_chain:
+            return "chain:" + "->".join(str(item) for item in source_chain)
+        return "source:" + str(provenance.get("source", "unknown_source"))
+
+    def _temporal_taint_status(self, request: ActionRequest) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        provenance = request.prompt_provenance
+        source_chain = provenance.get("source_chain")
+        if not isinstance(source_chain, list):
+            source_chain = [str(provenance.get("source", "unknown_source"))]
+        source_chain_text = [str(item) for item in source_chain]
+        taint_markers = provenance.get("taint_markers")
+        if not isinstance(taint_markers, list):
+            taint_markers = []
+        taint_markers_text = [str(item) for item in taint_markers]
+
+        state_key = self._temporal_taint_key(request)
+        state = self._temporal_taint_state.get(state_key)
+        first_seen_hint = self._parse_iso_timestamp(
+            provenance.get("first_seen_at") or provenance.get("first_seen_timestamp")
+        )
+        last_propagated_hint = self._parse_iso_timestamp(
+            provenance.get("last_propagated_at")
+            or provenance.get("last_propagated_timestamp")
+        )
+
+        if state is None:
+            first_seen = first_seen_hint or now
+            last_propagated = max(
+                first_seen,
+                last_propagated_hint or now,
+            )
+        else:
+            first_seen = state["first_seen"]
+            if first_seen_hint is not None:
+                first_seen = min(first_seen, first_seen_hint)
+            last_propagated = max(
+                state["last_propagated"],
+                last_propagated_hint or now,
+                now,
+            )
+
+        self._temporal_taint_state[state_key] = {
+            "first_seen": first_seen,
+            "last_propagated": last_propagated,
+        }
+
+        taint_age_hours = max((now - first_seen).total_seconds() / 3600.0, 0.0)
+        has_memory_trace = any("memory" in item.lower() for item in source_chain_text) or any(
+            marker.lower() in {"persistent_memory", "memory_injection", "delayed_execution"}
+            for marker in taint_markers_text
+        )
+        is_untrusted = self._resolve_input_class(request) == InputClass.UNTRUSTED
+        delayed_trigger_detected = bool(
+            is_untrusted
+            and has_memory_trace
+            and taint_age_hours >= self.delayed_taint_threshold_hours
+        )
+
+        return {
+            "state_key": state_key,
+            "mode": self.temporal_taint_mode,
+            "threshold_hours": self.delayed_taint_threshold_hours,
+            "first_seen_timestamp": self._format_iso_timestamp(first_seen),
+            "last_propagated_timestamp": self._format_iso_timestamp(last_propagated),
+            "taint_age_hours": round(taint_age_hours, 3),
+            "has_memory_trace": has_memory_trace,
+            "delayed_trigger_detected": delayed_trigger_detected,
+        }
+
+    def _with_temporal_status(
+        self, decision: ActionDecision, temporal_status: dict[str, Any]
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["temporal_taint_status"] = temporal_status
+        annotations["delayed_trigger_detected"] = temporal_status[
+            "delayed_trigger_detected"
+        ]
+        annotations["taint_age_hours"] = temporal_status["taint_age_hours"]
+        return replace(decision, annotations=annotations)
+
+    def _override_temporal_decision(
+        self,
+        request: ActionRequest,
+        decision: ActionDecision,
+        *,
+        reason_code: str,
+        human_reason: str,
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["temporal_taint_guard"] = True
+        annotations["guard_reason_code"] = reason_code
+        return ActionDecision(
+            request_id=request.request_id,
+            decision="block",
+            reason_code=reason_code,
+            human_reason=human_reason,
+            sink_type=request.sink_type,
+            target=request.target,
+            policy_profile=request.policy_profile,
+            engine=decision.engine,
+            policy_id=decision.policy_id,
+            trust_level=decision.trust_level or self._derive_trust_level(request),
+            witness_id=decision.witness_id,
+            annotations=annotations,
+        )
+
+    def _apply_temporal_taint_guards(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        temporal_status = self._temporal_taint_status(request)
+        decision = self._with_temporal_status(decision, temporal_status)
+
+        if (
+            self.temporal_taint_mode == "enforce"
+            and temporal_status["delayed_trigger_detected"]
+            and not decision.is_blocked()
+        ):
+            return self._override_temporal_decision(
+                request,
+                decision,
+                reason_code="DELAYED_TAINT_TRIGGER",
+                human_reason=(
+                    "Delayed untrusted memory trigger blocked by temporal taint enforcement"
+                ),
+            )
+
+        return decision
+
+    def _budget_enforcement_enabled(self) -> bool:
+        limits = (
+            self.budget_max_cost_usd,
+            self.budget_max_calls_per_window,
+            self.budget_max_calls_per_sink,
+        )
+        return any(limit is not None for limit in limits)
+
+    def _budget_reset_if_needed(self, now: datetime) -> None:
+        window_start = self._budget_state["window_start"]
+        elapsed = (now - window_start).total_seconds()
+        if elapsed < self.budget_window_seconds:
+            return
+        self._budget_state = {
+            "window_start": now,
+            "calls_total": 0,
+            "calls_per_sink": {},
+            "cost_total_usd": 0.0,
+        }
+
+    def _budget_request_cost_usd(self, request: ActionRequest) -> float:
+        candidates = (
+            request.metadata.get("cost_usd"),
+            request.metadata.get("estimated_cost_usd"),
+            request.arguments.get("cost_usd"),
+        )
+        for value in candidates:
+            if value is None:
+                continue
+            try:
+                return max(float(value), 0.0)
+            except (TypeError, ValueError):
+                continue
+        return self.budget_default_cost_usd
+
+    def _with_budget_status(
+        self, decision: ActionDecision, budget_status: dict[str, Any]
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["budget_status"] = budget_status
+        return replace(decision, annotations=annotations)
+
+    def _override_budget_decision(
+        self,
+        request: ActionRequest,
+        decision: ActionDecision,
+        *,
+        budget_status: dict[str, Any],
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["budget_guard"] = True
+        annotations["budget_status"] = budget_status
+        exceeded = budget_status.get("exceeded_limits") or ["configured_budget_limit"]
+        return ActionDecision(
+            request_id=request.request_id,
+            decision="block",
+            reason_code="BUDGET_LIMIT_EXCEEDED",
+            human_reason="Budget policy blocked request due to: " + ", ".join(exceeded),
+            sink_type=request.sink_type,
+            target=request.target,
+            policy_profile=request.policy_profile,
+            engine=decision.engine,
+            policy_id=decision.policy_id,
+            trust_level=decision.trust_level or self._derive_trust_level(request),
+            witness_id=decision.witness_id,
+            annotations=annotations,
+        )
+
+    def _apply_budget_guards(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        now = datetime.now(timezone.utc)
+        self._budget_reset_if_needed(now)
+        budget_enabled = self._budget_enforcement_enabled()
+        charge_applied = False
+        request_cost = 0.0
+
+        if budget_enabled:
+            if self.budget_charging_policy == "ATTEMPT_BASED":
+                charge_applied = True
+            else:
+                charge_applied = decision.decision == "allow"
+
+        if charge_applied:
+            request_cost = self._budget_request_cost_usd(request)
+            self._budget_state["calls_total"] += 1
+            sink_calls = self._budget_state["calls_per_sink"]
+            sink_calls[request.sink_type] = int(sink_calls.get(request.sink_type, 0)) + 1
+            self._budget_state["cost_total_usd"] += request_cost
+
+        sink_calls_count = int(
+            self._budget_state["calls_per_sink"].get(request.sink_type, 0)
+        )
+        exceeded_limits: list[str] = []
+        if (
+            self.budget_max_calls_per_window is not None
+            and self._budget_state["calls_total"] > self.budget_max_calls_per_window
+        ):
+            exceeded_limits.append("max_calls_per_window")
+        if (
+            self.budget_max_calls_per_sink is not None
+            and sink_calls_count > self.budget_max_calls_per_sink
+        ):
+            exceeded_limits.append("max_calls_per_sink")
+        if (
+            self.budget_max_cost_usd is not None
+            and self._budget_state["cost_total_usd"] > self.budget_max_cost_usd
+        ):
+            exceeded_limits.append("max_cost_usd")
+
+        budget_status = {
+            "enabled": budget_enabled,
+            "charging_policy": self.budget_charging_policy,
+            "charge_applied": charge_applied,
+            "request_cost_usd": round(request_cost, 6),
+            "window_start": self._format_iso_timestamp(self._budget_state["window_start"]),
+            "window_seconds": self.budget_window_seconds,
+            "calls_total": self._budget_state["calls_total"],
+            "calls_for_sink": sink_calls_count,
+            "cost_total_usd": round(float(self._budget_state["cost_total_usd"]), 6),
+            "limits": {
+                "max_cost_usd": self.budget_max_cost_usd,
+                "max_calls_per_window": self.budget_max_calls_per_window,
+                "max_calls_per_sink": self.budget_max_calls_per_sink,
+            },
+            "exceeded_limits": exceeded_limits,
+        }
+
+        decision = self._with_budget_status(decision, budget_status)
+
+        if budget_enabled and charge_applied and exceeded_limits and not decision.is_blocked():
+            return self._override_budget_decision(
+                request,
+                decision,
+                budget_status=budget_status,
             )
 
         return decision
