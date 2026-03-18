@@ -33,6 +33,7 @@ class WitnessGenerator:
         source_chain = self._extract_source_chain(request)
         taint_markers = self._extract_taint_markers(request, decision)
         cec_status = self._extract_cec_status(decision)
+        package_trust = self._extract_package_trust(request, decision)
 
         adapter_metadata = request.metadata.get(
             "adapter",
@@ -62,6 +63,7 @@ class WitnessGenerator:
             },
             "input_class": str(request.input_class),
             "cec_status": cec_status,
+            "package_trust": package_trust,
             "witness_signature": self._sign(witness_id, request, decision),
             "engine": decision.engine,
             "adapter": adapter_metadata,
@@ -138,6 +140,48 @@ class WitnessGenerator:
             "has_exfil_capability": bool(raw.get("has_exfil_capability", False)),
             "cec_triggered": bool(raw.get("cec_triggered", False)),
         }
+
+    @staticmethod
+    def _extract_package_trust(
+        request: ActionRequest, decision: ActionDecision
+    ) -> dict[str, Any]:
+        def _optional_text(value: Any) -> str | None:
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text or text.lower() == "none":
+                return None
+            return text
+
+        raw = decision.annotations.get("package_trust")
+        package_trust: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+        fallback_source = _optional_text(request.package_source)
+        if fallback_source is None:
+            fallback_source = _optional_text(request.metadata.get("package_source"))
+        if fallback_source is None:
+            fallback_source = "unspecified"
+        package_trust.setdefault(
+            "package_source",
+            fallback_source,
+        )
+        package_trust.setdefault(
+            "package_hash",
+            _optional_text(request.package_hash)
+            or _optional_text(request.metadata.get("package_hash")),
+        )
+        package_trust.setdefault(
+            "package_signature",
+            _optional_text(request.package_signature)
+            or _optional_text(request.metadata.get("package_signature")),
+        )
+        package_trust.setdefault(
+            "publisher_id",
+            _optional_text(request.publisher_id)
+            or _optional_text(request.metadata.get("publisher_id")),
+        )
+        package_trust.setdefault("policy_reason", decision.reason_code)
+        package_trust.setdefault("policy_decision", decision.decision)
+        return package_trust
 
     def _sign(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision

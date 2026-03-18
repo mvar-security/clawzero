@@ -83,13 +83,21 @@ def _cmd_audit_decision(args: argparse.Namespace) -> int:
             "taint_markers": taint_markers,
         },
         input_class=args.input_class,
+        package_source=args.package_source,
+        package_hash=args.package_hash,
+        package_signature=args.package_signature,
+        publisher_id=args.publisher_id,
         policy_profile=args.profile,
         metadata={
             "adapter": {
                 "name": "openclaw",
                 "mode": "tool_wrap",
                 "framework": "openclaw",
-            }
+            },
+            "package_source": args.package_source,
+            "package_hash": args.package_hash,
+            "package_signature": args.package_signature,
+            "publisher_id": args.publisher_id,
         },
     )
 
@@ -104,6 +112,15 @@ def _cmd_audit_decision(args: argparse.Namespace) -> int:
     print(f"target     : {decision.target}")
     print(f"policy_id  : {decision.policy_id}")
     print(f"engine     : {decision.engine}")
+    package_trust = decision.annotations.get("package_trust")
+    if isinstance(package_trust, dict):
+        print(f"pkg_source : {package_trust.get('package_source', 'unspecified')}")
+        print(f"publisher  : {package_trust.get('publisher_id') or 'unknown'}")
+        print(
+            "pkg_trust  : "
+            f"{package_trust.get('policy_decision', decision.decision)}"
+            f" ({package_trust.get('policy_reason', decision.reason_code)})"
+        )
     if runtime.last_witness:
         print(f"witness_id : {runtime.last_witness.get('witness_id')}")
     return 0
@@ -651,6 +668,10 @@ def build_parser() -> argparse.ArgumentParser:
     audit_decision.add_argument("--taint-level", default="untrusted")
     audit_decision.add_argument("--input-class", default=InputClass.UNTRUSTED.value)
     audit_decision.add_argument("--taint-markers", default="prompt_injection,external_content")
+    audit_decision.add_argument("--package-source", default=None)
+    audit_decision.add_argument("--package-hash", default=None)
+    audit_decision.add_argument("--package-signature", default=None)
+    audit_decision.add_argument("--publisher-id", default=None)
     audit_decision.add_argument(
         "--cec-enforce",
         action="store_true",

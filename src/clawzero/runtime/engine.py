@@ -34,6 +34,7 @@ class MVARRuntime:
         network_allowlist: Optional[list[str]] = None,
         trusted_websocket_origins: Optional[list[str]] = None,
         require_controlplane_auth: bool = True,
+        trusted_publishers: Optional[list[str]] = None,
     ):
         self.profile = profile
         self.witness_dir = witness_dir
@@ -44,6 +45,7 @@ class MVARRuntime:
             trusted_websocket_origins or []
         )
         self.require_controlplane_auth = require_controlplane_auth
+        self.trusted_publishers = self._normalize_identity_set(trusted_publishers or [])
         self.last_witness: Optional[dict[str, Any]] = None
         self._cec_state = {
             "has_private_data": False,
@@ -86,6 +88,7 @@ class MVARRuntime:
             "ledger_signer_detail": signer["ledger_signer_detail"],
             "network_mode": self.network_mode,
             "network_allowlist": sorted(self.network_allowlist),
+            "trusted_publishers": sorted(self.trusted_publishers),
         }
 
     def signer_info(self) -> dict[str, str | None]:
@@ -219,6 +222,7 @@ class MVARRuntime:
             decision.annotations["cec_escalated_profile"] = "prod_locked"
 
         decision = self._apply_control_plane_guards(prepared_request, decision)
+        decision = self._apply_package_trust_guards(prepared_request, decision)
         decision.annotations["input_class"] = prepared_request.input_class
         decision.annotations["effective_policy_profile"] = prepared_request.policy_profile
         decision.annotations["cec_status"] = cec_status
@@ -340,6 +344,15 @@ class MVARRuntime:
             if host:
                 hosts.add(host)
         return hosts
+
+    @staticmethod
+    def _normalize_identity_set(values: list[str]) -> set[str]:
+        identities: set[str] = set()
+        for value in values:
+            normalized = str(value or "").strip().lower()
+            if normalized:
+                identities.add(normalized)
+        return identities
 
     def _extract_hostname(self, value: str | None) -> Optional[str]:
         if value is None:
@@ -498,6 +511,141 @@ class MVARRuntime:
 
         return decision
 
+    @staticmethod
+    def _normalize_package_source(value: str | None) -> str:
+        normalized = str(value or "").strip().lower()
+        if not normalized:
+            return "unspecified"
+        return normalized.replace(" ", "_")
+
+    @staticmethod
+    def _optional_text(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text or text.lower() == "none":
+            return None
+        return text
+
+    def _package_trust_context(self, request: ActionRequest) -> dict[str, Any]:
+        package_source = request.package_source
+        if not package_source:
+            package_source = self._optional_text(request.metadata.get("package_source"))
+
+        package_hash = request.package_hash
+        if not package_hash:
+            package_hash = self._optional_text(request.metadata.get("package_hash"))
+
+        package_signature = request.package_signature
+        if not package_signature:
+            package_signature = self._optional_text(request.metadata.get("package_signature"))
+
+        publisher_id = request.publisher_id
+        if not publisher_id:
+            publisher_id = self._optional_text(request.metadata.get("publisher_id"))
+
+        normalized_source = self._normalize_package_source(package_source)
+        is_marketplace = normalized_source in {
+            "marketplace",
+            "clawhub",
+            "clawhub_marketplace",
+            "openclaw_marketplace",
+        }
+        normalized_publisher = str(publisher_id or "").strip().lower()
+        publisher_known = bool(
+            normalized_publisher and normalized_publisher in self.trusted_publishers
+        )
+
+        return {
+            "package_source": normalized_source,
+            "package_hash": package_hash,
+            "package_signature": package_signature,
+            "publisher_id": normalized_publisher or None,
+            "signature_present": bool(package_signature),
+            "is_marketplace": is_marketplace,
+            "strict_profile": request.policy_profile in {"dev_strict", "prod_locked"},
+            "publisher_known": publisher_known,
+        }
+
+    def _with_package_context(
+        self, decision: ActionDecision, package_context: dict[str, Any]
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["package_trust"] = package_context
+        return replace(decision, annotations=annotations)
+
+    def _override_package_decision(
+        self,
+        request: ActionRequest,
+        decision: ActionDecision,
+        *,
+        decision_value: str,
+        reason_code: str,
+        human_reason: str,
+        enforcement_action: str | None = None,
+    ) -> ActionDecision:
+        annotations = dict(decision.annotations)
+        annotations["package_trust_guard"] = True
+        annotations["guard_reason_code"] = reason_code
+        if enforcement_action:
+            annotations["enforcement_action"] = enforcement_action
+        package_trust = annotations.get("package_trust")
+        if isinstance(package_trust, dict):
+            package_trust["policy_outcome"] = reason_code
+            package_trust["policy_decision"] = decision_value
+
+        return ActionDecision(
+            request_id=request.request_id,
+            decision=decision_value,
+            reason_code=reason_code,
+            human_reason=human_reason,
+            sink_type=request.sink_type,
+            target=request.target,
+            policy_profile=request.policy_profile,
+            engine=decision.engine,
+            policy_id=decision.policy_id,
+            trust_level=decision.trust_level or self._derive_trust_level(request),
+            witness_id=decision.witness_id,
+            annotations=annotations,
+        )
+
+    def _apply_package_trust_guards(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        package_context = self._package_trust_context(request)
+        decision = self._with_package_context(decision, package_context)
+
+        if not package_context["is_marketplace"]:
+            return decision
+
+        if (
+            request.policy_profile == "prod_locked"
+            and not package_context["signature_present"]
+        ):
+            return self._override_package_decision(
+                request,
+                decision,
+                decision_value="block",
+                reason_code="UNSIGNED_MARKETPLACE_PACKAGE",
+                human_reason="Unsigned marketplace package blocked in prod_locked profile",
+            )
+
+        if (
+            package_context["strict_profile"]
+            and not package_context["publisher_known"]
+            and not decision.is_blocked()
+        ):
+            return self._override_package_decision(
+                request,
+                decision,
+                decision_value="annotate",
+                reason_code="UNKNOWN_PUBLISHER_STEP_UP",
+                human_reason="Unknown marketplace publisher requires step-up approval",
+                enforcement_action="block_until_approved",
+            )
+
+        return decision
+
     def _evaluate_via_mvar(self, request: ActionRequest) -> ActionDecision:
         """
         MVAR evaluation path.
@@ -517,6 +665,10 @@ class MVARRuntime:
             "policy_profile": request.policy_profile,
             "prompt_provenance": request.prompt_provenance,
             "framework": request.framework,
+            "package_source": request.package_source,
+            "package_hash": request.package_hash,
+            "package_signature": request.package_signature,
+            "publisher_id": request.publisher_id,
         }
 
         for method_name in ("evaluate", "decide", "enforce"):

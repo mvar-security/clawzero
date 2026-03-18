@@ -38,6 +38,11 @@ class ActionRequest:
     conversation_context: dict[str, Any] = field(default_factory=dict)
     input_class: Optional[str] = None
 
+    package_source: Optional[str] = None
+    package_hash: Optional[str] = None
+    package_signature: Optional[str] = None
+    publisher_id: Optional[str] = None
+
     policy_profile: str = "dev_balanced"
     metadata: dict[str, Any] = field(default_factory=dict)
 
