@@ -1,11 +1,14 @@
 {
-  "timestamp": "2026-03-13T03:18:36.816810+00:00",
+  "schema_version": "1.1",
+  "chain_index": 1,
+  "previous_hash": "genesis",
+  "timestamp": "2026-03-17T21:20:27.136878+00:00",
   "agent_runtime": "openclaw",
   "sink_type": "shell.exec",
   "target": "bash",
   "decision": "block",
   "reason_code": "UNTRUSTED_TO_CRITICAL_SINK",
-  "policy_id": "mvar-embedded.v0.1",
+  "policy_id": "mvar-security.v1.4.3",
   "provenance": {
     "source": "external_document",
     "taint_level": "untrusted",
@@ -20,15 +23,22 @@
       "external_content"
     ]
   },
-  "witness_signature": "ed25519_stub:fb540ef15900f7e7",
-  "engine": "embedded-policy-v0.1",
+  "input_class": "untrusted",
+  "cec_status": {
+    "has_private_data": false,
+    "has_untrusted_input": true,
+    "has_exfil_capability": true,
+    "cec_triggered": false
+  },
+  "witness_signature": "ed25519:bda40e62003fc52bca749d8b6e81130bc2e04a75a7561693a1470106b4b8efa9fbc0669665dc40d591ad8745f73a215005d7969ab3465862fcdad8bc46a25d0b",
+  "engine": "mvar-security",
   "adapter": {
     "name": "openclaw",
     "mode": "tool_wrap",
     "framework": "openclaw"
   },
-  "witness_id": "0ae0b49b-3d08-440e-834c-4dfa0ec99beb",
-  "request_id": "6af87fc9-8ebf-4fd5-bea9-14427554a847",
+  "witness_id": "aea305ef-3e95-4607-b386-2dc2485c03fc",
+  "request_id": "0475f0e4-6006-4f73-ade5-0fd73f0d3a26",
   "framework": "openclaw",
   "agent_id": "openclaw_demo_agent",
   "session_id": "openclaw_demo_session",
@@ -45,16 +55,55 @@
   "decision_detail": {
     "result": "block",
     "reason_code": "UNTRUSTED_TO_CRITICAL_SINK",
-    "human_reason": "MVAR policy blocked shell execution at critical sink",
+    "human_reason": "MVAR policy decision: UNTRUSTED_TO_CRITICAL_SINK",
     "policy_profile": "prod_locked",
-    "policy_id": "mvar-embedded.v0.1",
-    "engine": "embedded-policy-v0.1"
+    "policy_id": "mvar-security.v1.4.3",
+    "engine": "mvar-security"
   },
   "annotations": {
-    "policy_rule_matched": "shell.exec",
+    "witness_signature": "ed25519:bda40e62003fc52bca749d8b6e81130bc2e04a75a7561693a1470106b4b8efa9fbc0669665dc40d591ad8745f73a215005d7969ab3465862fcdad8bc46a25d0b",
+    "provenance": {
+      "source": "external_document",
+      "taint_level": "untrusted",
+      "source_chain": [
+        "external_document",
+        "document_parser",
+        "llm_output",
+        "openclaw_tool_call"
+      ],
+      "taint_markers": [
+        "prompt_injection",
+        "external_content"
+      ],
+      "integrity": "untrusted",
+      "confidentiality": "public",
+      "node_id": "66643d461e1cb1832c874ae0ef03f153"
+    },
+    "evaluation_trace": [
+      "input_integrity=UNTRUSTED",
+      "sink_classification=CRITICAL",
+      "rule_fired=UNTRUSTED_TO_CRITICAL_SINK",
+      "final_outcome=BLOCK",
+      "policy_hash: 225555ee62405755bdf0f5fbd566032c251c8d97e1295349918b17903a410d7f",
+      "startup_policy_verification: ok",
+      "sink_classified: critical",
+      "boundary_violation: shell metacharacters detected (strict execution boundary) \u2192 BLOCK",
+      "composition_risk: current=0, predicted=10, next_weight=10, window_s=900",
+      "pre_evaluated_decision_used"
+    ],
+    "enforcement_action": null,
     "taint_markers": [
       "prompt_injection",
       "external_content"
-    ]
-  }
+    ],
+    "input_class": "untrusted",
+    "effective_policy_profile": "prod_locked",
+    "cec_status": {
+      "has_private_data": false,
+      "has_untrusted_input": true,
+      "has_exfil_capability": true,
+      "cec_triggered": false
+    }
+  },
+  "content_hash": "sha256:bf895b64ed16c5c265fa9a3b1fbf3d0061dce293437eeb28c236986375a40572"
 }
