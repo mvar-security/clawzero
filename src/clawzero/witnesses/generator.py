@@ -235,7 +235,11 @@ class WitnessGenerator:
         for key, value in fallback.items():
             status.setdefault(key, value)
         if not isinstance(status.get("limits"), dict):
-            status["limits"] = dict(fallback["limits"])
+            status["limits"] = {
+                "max_cost_usd": None,
+                "max_calls_per_window": None,
+                "max_calls_per_sink": None,
+            }
         if not isinstance(status.get("exceeded_limits"), list):
             status["exceeded_limits"] = []
         return status
