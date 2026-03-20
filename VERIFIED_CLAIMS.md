@@ -1,66 +1,183 @@
 # VERIFIED CLAIMS
 
-Last verified: March 17, 2026
-Release target: clawzero==0.1.4
+Last verified: March 20, 2026  
+Release target: `clawzero==0.1.5`
 
-Every claim below has a reproducible command and expected output.
+All claims below are command-backed and reproducible in the current repository and release.
 
-## Claim: Real Ed25519 witness signatures are active
+## Claim: `clawzero doctor openclaw` returns secure runtime posture
 Status: VERIFIED
-Test: `pytest -q tests/test_release_contract.py::test_release_witness_contract_uses_mvar_fields`
-CLI: `clawzero doctor openclaw`
-Expected: `Witness signer:  Ed25519 (QSEAL) ✓`
 
-## Claim: Witness artifacts are hash-chained and tamper-evident
-Status: VERIFIED
-Test: `pytest -q tests/test_witness_trust.py -k "chain_fields_present or chain_links_correctly or chain_break_detected"`
-CLI: `clawzero witness verify-chain --dir ./witnesses`
-Expected: `CHAIN VALID (N witnesses)`
+Proof command:
+```bash
+clawzero doctor openclaw
+```
 
-## Claim: Witness signatures verify on generated artifacts
-Status: VERIFIED
-Test: `pytest -q tests/test_witness_trust.py -k "tamper_detected_by_verify"`
-CLI: `clawzero witness verify --file ./witnesses/witness_001.json`
-Expected: `VALID`
+Expected output includes:
+- `Runtime......... OK (mvar-security 1.4.3)`
+- `Witness......... OK (chain valid)`
+- `Demo............ OK (attack blocked)`
+- `Exposure........ OK (control-plane guards active)`
+- `Witness signer:  Ed25519 (QSEAL) ✓`
+- `Status: SECURE`
 
-## Claim: OpenClaw compare demo blocks critical-shell execution
-Status: VERIFIED
-Test: `pytest -q tests/test_claims.py -k test_shell_injection_blocked`
-CLI: `clawzero demo openclaw --mode compare --scenario shell`
-Expected: `RESULT: ATTACK BLOCKED ✓`
+Source:
+- `src/clawzero/doctor.py`
+- `tests/test_doctor_cli.py`
 
-## Claim: Installed runtime resolves to mvar-security engine
+## Claim: Shell injection is blocked at the execution boundary
 Status: VERIFIED
-Test: `pytest -q tests/test_release_contract.py::test_release_witness_contract_uses_mvar_fields`
-CLI: `clawzero doctor openclaw`
-Expected: `Runtime......... OK (mvar-security 1.4.3)`
 
-## Claim: Policy attribution is sourced from mvar-security
-Status: VERIFIED
-Test: `pytest -q tests/test_release_contract.py::test_release_witness_contract_uses_mvar_fields`
-CLI: `clawzero demo openclaw --mode compare --scenario shell`
-Expected: `Policy:  mvar-security.v1.4.3`
+Proof command:
+```bash
+clawzero demo openclaw --mode compare --scenario shell
+```
 
-## Claim: LangChain adapter blocks untrusted shell path
-Status: VERIFIED
-Test: `pytest -q tests/test_langchain_adapter.py -k test_langchain_tool_blocks_shell_exec`
-CLI: `python examples/langchain_integration.py`
-Expected: shell path blocked; safe path allowed
+Expected output includes:
+- `Standard OpenClaw   →  COMPROMISED`
+- `MVAR-Protected      →  BLOCKED ✓`
+- `Policy:  mvar-security.v1.4.3`
+- `Reason:  UNTRUSTED_TO_CRITICAL_SINK`
 
-## Claim: SARIF export produces valid report payload
-Status: VERIFIED
-Test: `pytest -q tests/test_sarif_export.py`
-CLI: `clawzero report sarif --input ./witnesses --output ./results.sarif`
-Expected: valid SARIF document with mapped decisions
+Source:
+- `src/clawzero/demo/openclaw_attack_demo.py`
+- `tests/test_claims.py`
 
-## Claim: CEC (3-leg condition) is detected and recorded
+## Claim: Unsigned ClawHub packages are blocked in `prod_locked`
 Status: VERIFIED
-Test: `pytest -q tests/test_phase3_controls.py -k "cec_triggered_all_three_legs or cec_warn_adds_to_witness or cec_enforce_escalates_profile"`
-CLI: `clawzero audit decision --profile dev_balanced --sink-type http.request --target https://attacker.example/exfil --source external_document --taint-level untrusted --cec-enforce`
-Expected: witness includes `cec_status` and escalation metadata when enforced
 
-## Claim: Execution replay and explain are deterministic and readable
+Proof command:
+```bash
+clawzero audit decision \
+  --profile prod_locked \
+  --sink-type tool.custom \
+  --target install_skill \
+  --package-source clawhub \
+  --package-hash sha256:deadbeef \
+  --publisher-id unknown-publisher
+```
+
+Expected output includes:
+- `decision   : block`
+- `reason     : UNSIGNED_MARKETPLACE_PACKAGE`
+- `pkg_trust  : block (UNSIGNED_MARKETPLACE_PACKAGE)`
+
+Source:
+- `tests/test_phaseB_package_trust.py`
+- `tests/test_phaseB_cli_package_trust.py`
+
+## Claim: Temporal taint can block delayed activation from memory traces
 Status: VERIFIED
-Test: `pytest -q tests/test_phase4_cli.py -k "witness_explain_output or replay_orders_and_summarizes"`
-CLI: `clawzero witness explain ./witnesses/witness_001.json && clawzero replay --session ./witnesses`
-Expected: structured explanation and ordered session summary
+
+Proof command:
+```bash
+pytest -q tests/test_phaseC_temporal_taint.py
+```
+
+Expected test assertion includes:
+- `decision.reason_code == "DELAYED_TAINT_TRIGGER"`
+- `taint_age_hours > delayed_taint_threshold_hours` path blocks in enforce mode
+
+Source:
+- `src/clawzero/runtime/engine.py`
+- `tests/test_phaseC_temporal_taint.py`
+
+## Claim: Budget and abuse controls deterministically block over-limit requests
+Status: VERIFIED
+
+Proof command:
+```bash
+pytest -q tests/test_phaseD_budget_controls.py
+```
+
+Expected test assertions include:
+- `decision.reason_code == "BUDGET_LIMIT_EXCEEDED"`
+- block when configured cost/call ceilings are exceeded
+
+Source:
+- `src/clawzero/runtime/engine.py`
+- `tests/test_phaseD_budget_controls.py`
+
+## Claim: Witness artifacts are valid and hash-chain verifiable
+Status: VERIFIED
+
+Proof commands:
+```bash
+clawzero witness verify --file <witness.json>
+clawzero witness verify-chain --dir <witness_dir>
+```
+
+Expected output:
+- `VALID`
+- `CHAIN VALID (N witnesses)`
+
+Source:
+- `src/clawzero/witnesses/generator.py`
+- `src/clawzero/witnesses/verify.py`
+- `tests/test_witness_trust.py`
+
+## Claim: CI matrix and release gate are green on `main`
+Status: VERIFIED
+
+Proof command:
+```bash
+gh run list --repo mvar-security/clawzero --limit 10
+```
+
+Expected recent successful runs include:
+- `CI` green across `ubuntu-latest` + `macos-latest` on Python `3.10/3.11/3.12/3.13`
+- `release-gate` job: PASS
+- `download-smoke` jobs: PASS
+
+Source:
+- `.github/workflows/test.yml`
+
+## Claim: Credential-read exfiltration path is blocked in compare mode
+Status: VERIFIED
+
+Proof command:
+```bash
+clawzero demo openclaw --mode compare --scenario credentials
+```
+
+Expected output includes:
+- `Standard OpenClaw   →  COMPROMISED`
+- `MVAR-Protected      →  BLOCKED ✓`
+- `Policy:  mvar-security.v1.4.3`
+
+Source:
+- `src/clawzero/demo/openclaw_attack_demo.py`
+- `tests/test_claims.py`
+
+## Claim: Replay and explain commands produce deterministic human-readable output
+Status: VERIFIED
+
+Proof commands:
+```bash
+pytest -q tests/test_phase4_cli.py -k "witness_explain_output or replay_orders_and_summarizes"
+```
+
+Expected:
+- witness explain output includes structured sections (`Request`, `Provenance`, `Decision`)
+- replay output is ordered and includes a session summary
+
+Source:
+- `src/clawzero/cli.py`
+- `tests/test_phase4_cli.py`
+
+## Claim: SARIF export generates valid code-scanning payloads
+Status: VERIFIED
+
+Proof commands:
+```bash
+pytest -q tests/test_sarif_export.py
+clawzero report sarif --input <witness_dir> --output ./results.sarif
+```
+
+Expected:
+- SARIF file is generated
+- decisions are mapped into SARIF result entries
+
+Source:
+- `src/clawzero/sarif.py`
+- `tests/test_sarif_export.py`

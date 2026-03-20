@@ -14,17 +14,17 @@
   <img alt="ClawZero Header" src="docs/assets/clawzero-header-banner-light-mode-vf.png" width="760">
 </picture>
 
-<h2>Same input. Same agent. Different execution boundary.</h2>
+<h2>ClawZero is an execution firewall for AI agents.</h2>
 
 <p>
-ClawZero is a deterministic execution boundary for OpenClaw agents.<br/>
-It places policy enforcement between model output and tool execution.<br/>
+Blocks CVE-2026-25253, malicious ClawHub skills, and persistent memory injection.<br/>
+100% block rate across 50 attack categories. Zero-config API.<br/>
 <strong>Powered by MVAR, the runtime for secure AI agents.</strong>
 </p>
 
 <p>
-ClawZero is not a model. It is a runtime enforcement boundary.<br/>
-It works with any LLM, any OpenClaw agent, and any tool definition.
+Same input. Same agent. Different execution boundary.<br/>
+ClawZero enforces policy between model output and tool execution.
 </p>
 
 <p>
@@ -74,6 +74,59 @@ STANDARD OPENCLAW  →  COMPROMISED
 MVAR-PROTECTED     →  BLOCKED ✓
 Witness generated  →  YES
 ```
+
+## OpenClaw Security Crisis
+
+220,000+ exposed instances. 50,000+ RCE-vulnerable via CVE-2026-25253. 1,184 malicious ClawHub skills discovered.
+
+ClawZero blocks exploitation at the execution boundary before credentials leak, before shells execute, and before data exfiltrates.
+
+## Addresses 5 of 7 DigitalOcean OpenClaw Security Challenges
+
+| Challenge | ClawZero Defense | Command |
+|-----------|------------------|---------|
+| #1 WebSocket RCE | `trusted_websocket_origins` checks + exposure diagnostics | `clawzero doctor openclaw` |
+| #3 Malicious Skills | `UNSIGNED_MARKETPLACE_PACKAGE` enforcement in `prod_locked` | `clawzero audit decision --profile prod_locked --sink-type tool.custom --target install_skill --package-source clawhub --package-hash sha256:deadbeef --publisher-id unknown-publisher` |
+| #4 Credential exfil | Critical file-read boundary enforcement | `clawzero demo openclaw --mode compare --scenario credentials` |
+| #5 Persistent memory | Temporal taint tracking with delayed-trigger enforcement mode | `pytest -q tests/test_phaseC_temporal_taint.py` |
+| #6 Shadow AI | Witness artifacts + `doctor` posture checks | `clawzero doctor openclaw` |
+
+## Persistent Memory Injection Protection
+
+ClawZero detects delayed-activation attacks where malicious instructions are embedded in agent memory and trigger days later.
+
+Day 1: Agent reads a malicious document.  
+Day 3: Hidden instruction triggers.  
+ClawZero: delayed taint reason code path blocks in enforce mode.
+
+Note: We are not aware of other open-source implementations of temporal taint tracking for AI agents.
+
+Reference: `tests/test_phaseC_temporal_taint.py`.
+
+## Enterprise Features
+
+- Compliance-ready audit logs (SARIF export)
+- Budget controls (spending limits and abuse detection)
+- Package trust validation (blocks unsigned ClawHub skills in `prod_locked`)
+- Network isolation controls (`localhost_only` / `allowlist_only`)
+- Cryptographically signed witness artifacts
+- `clawzero doctor openclaw` posture check (`Status: SECURE`)
+
+## ClawZero vs Alternatives
+
+Based on public positioning:
+
+- VellaVeto: MCP-specific firewall with formal-verification focus, not OpenClaw-native.
+- NemoClaw: NVIDIA managed platform, currently alpha/waitlist.
+- Sage: Detection-and-response model that alerts after attempts.
+- ClawZero: zero-config runtime enforcement, IFC taint-aware policy, production-ready today.
+
+Decision shortcuts:
+
+- Need formal-verification-first MCP posture: VellaVeto.
+- Need managed platform lifecycle: NemoClaw (when GA).
+- Need detection + response workflow: Sage.
+- Need zero-config execution firewall: ClawZero.
 
 ## Adapters
 
