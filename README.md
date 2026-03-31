@@ -160,6 +160,45 @@ Run the packaged example:
 python examples/langchain_integration.py
 ```
 
+## Protect Entire Agents
+
+```python
+from clawzero import protect_agent
+
+safe_agent = protect_agent(agent, profile="prod_locked")
+```
+
+`protect_agent()` auto-detects common framework patterns and wraps registered tools with deterministic sink enforcement.
+
+## Additional Framework Adapters
+
+CrewAI and AutoGen adapters are now included alongside OpenClaw and LangChain:
+
+```python
+from clawzero.adapters.crewai import protect_crewai_tool
+from clawzero.adapters.autogen import protect_autogen_function
+```
+
+## Attack Pack Validation (50 Vectors)
+
+Run the packaged attack corpus:
+
+```bash
+pytest tests/attack_pack/ -v
+```
+
+Categories covered: command injection, path traversal, credential exfiltration, data exfiltration, persistence, lateral movement, supply chain, social engineering, and denial of service.
+
+## Benchmark
+
+Measure policy decision latency:
+
+```bash
+python -m clawzero.benchmark --iterations 1000
+```
+
+This reports per-scenario mean/p95/p99 latency and throughput for deterministic sink enforcement.
+
 ## Why ClawZero?
 
 Autonomous AI agents frequently execute tool calls with high privileges.

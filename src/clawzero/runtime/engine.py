@@ -263,6 +263,7 @@ class MVARRuntime:
 
         decision = self._apply_control_plane_guards(prepared_request, decision)
         decision = self._apply_package_trust_guards(prepared_request, decision)
+        decision = self._apply_filesystem_safety_guards(prepared_request, decision)
         decision = self._apply_temporal_taint_guards(prepared_request, decision)
         decision = self._apply_budget_guards(prepared_request, decision)
         decision.annotations["input_class"] = prepared_request.input_class
@@ -840,6 +841,82 @@ class MVARRuntime:
             witness_id=decision.witness_id,
             annotations=annotations,
         )
+
+    def _apply_filesystem_safety_guards(
+        self, request: ActionRequest, decision: ActionDecision
+    ) -> ActionDecision:
+        """
+        Enforce deterministic path safety constraints for filesystem reads.
+
+        This guard closes traversal/encoding bypass cases even when upstream
+        governor policies are permissive.
+        """
+        if request.sink_type != "filesystem.read":
+            return decision
+
+        if decision.decision == "block":
+            return decision
+
+        target = str(request.target or "")
+        target_lower = target.lower()
+
+        traversal_tokens = (
+            "../",
+            "..\\",
+            "%2e%2e",
+            "%2f",
+            "%5c",
+            "%32%65",
+            "\x00",
+        )
+        sensitive_prefixes = (
+            "/etc/",
+            "/proc/",
+            "/root/",
+            "/home/",
+            "~/.ssh/",
+            "/users/",
+        )
+
+        has_traversal_signal = any(token in target_lower for token in traversal_tokens)
+        is_sensitive_target = target_lower.startswith(sensitive_prefixes)
+
+        profile = request.policy_profile or self.profile
+
+        if profile == "prod_locked":
+            if (
+                has_traversal_signal
+                or is_sensitive_target
+                or not target_lower.startswith("/workspace/project/")
+            ):
+                return self._decision_block(
+                    request,
+                    reason_code="PATH_BLOCKED",
+                    human_reason="MVAR prod policy blocked unsafe filesystem read path",
+                )
+            return decision
+
+        if profile == "dev_strict":
+            if (
+                has_traversal_signal
+                or is_sensitive_target
+                or not target_lower.startswith("/workspace/")
+            ):
+                return self._decision_block(
+                    request,
+                    reason_code="PATH_BLOCKED",
+                    human_reason="MVAR strict policy blocked unsafe filesystem read path",
+                )
+            return decision
+
+        if profile == "dev_balanced" and (has_traversal_signal or is_sensitive_target):
+            return self._decision_block(
+                request,
+                reason_code="PATH_BLOCKED",
+                human_reason="MVAR balanced policy blocked unsafe filesystem read path",
+            )
+
+        return decision
 
     def _apply_temporal_taint_guards(
         self, request: ActionRequest, decision: ActionDecision

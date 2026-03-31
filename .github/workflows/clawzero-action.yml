@@ -1,0 +1,71 @@
+name: ClawZero Security Gate
+description: "Run ClawZero attack pack validation as a reusable workflow"
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: "Policy profile (dev_balanced, dev_strict, prod_locked)"
+        required: false
+        default: "prod_locked"
+        type: string
+      witness-dir:
+        description: "Directory for witness artifacts"
+        required: false
+        default: "./witnesses"
+        type: string
+      python-version:
+        description: "Python version to use"
+        required: false
+        default: "3.12"
+        type: string
+
+jobs:
+  security-gate:
+    name: ClawZero Security Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install ClawZero
+        run: |
+          python -m pip install --upgrade pip
+          pip install clawzero
+
+      - name: Create witness directory
+        run: mkdir -p ${{ inputs.witness-dir }}
+
+      - name: Run attack pack validation
+        run: |
+          echo "Running ClawZero attack pack with profile: ${{ inputs.profile }}"
+          pytest tests/attack_pack/ -v --tb=short 2>&1 | tee clawzero_validation.txt
+        env:
+          CLAWZERO_PROFILE: ${{ inputs.profile }}
+          CLAWZERO_WITNESS_DIR: ${{ inputs.witness-dir }}
+
+      - name: Generate SARIF report
+        if: always()
+        run: |
+          clawzero report sarif \
+            --input ${{ inputs.witness-dir }} \
+            --output clawzero-scan.sarif || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: clawzero-scan.sarif
+        continue-on-error: true
+
+      - name: Upload witness artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawzero-witnesses
+          path: ${{ inputs.witness-dir }}/
