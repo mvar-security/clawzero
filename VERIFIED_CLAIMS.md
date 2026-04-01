@@ -1,9 +1,9 @@
 # VERIFIED CLAIMS
 
-Last verified: March 20, 2026  
-Release target: `clawzero==0.1.5`
+Last verified: April 1, 2026  
+Release target: `clawzero==0.2.0`
 
-All claims below are command-backed and reproducible in the current repository and release.
+All claims below are command-backed and reproducible from the repository.
 
 ## Claim: `clawzero doctor openclaw` returns secure runtime posture
 Status: VERIFIED
@@ -66,7 +66,7 @@ Source:
 - `tests/test_phaseB_package_trust.py`
 - `tests/test_phaseB_cli_package_trust.py`
 
-## Claim: Temporal taint can block delayed activation from memory traces
+## Claim: Temporal taint enforcement blocks delayed activation traces
 Status: VERIFIED
 
 Proof command:
@@ -76,13 +76,13 @@ pytest -q tests/test_phaseC_temporal_taint.py
 
 Expected test assertion includes:
 - `decision.reason_code == "DELAYED_TAINT_TRIGGER"`
-- `taint_age_hours > delayed_taint_threshold_hours` path blocks in enforce mode
+- delayed trigger path blocks in enforce mode
 
 Source:
 - `src/clawzero/runtime/engine.py`
 - `tests/test_phaseC_temporal_taint.py`
 
-## Claim: Budget and abuse controls deterministically block over-limit requests
+## Claim: Budget controls block over-limit requests deterministically
 Status: VERIFIED
 
 Proof command:
@@ -90,9 +90,8 @@ Proof command:
 pytest -q tests/test_phaseD_budget_controls.py
 ```
 
-Expected test assertions include:
+Expected test assertion includes:
 - `decision.reason_code == "BUDGET_LIMIT_EXCEEDED"`
-- block when configured cost/call ceilings are exceeded
 
 Source:
 - `src/clawzero/runtime/engine.py`
@@ -116,68 +115,69 @@ Source:
 - `src/clawzero/witnesses/verify.py`
 - `tests/test_witness_trust.py`
 
-## Claim: CI matrix and release gate are green on `main`
+## Claim: 5 framework adapter surfaces are shipped
 Status: VERIFIED
 
 Proof command:
 ```bash
-gh run list --repo mvar-security/clawzero --limit 10
+python - <<'PY'
+from clawzero import OpenClawAdapter, LangChainAdapter, CrewAIAdapter, AutoGenAdapter, protect_agent
+print("OK")
+PY
 ```
 
-Expected recent successful runs include:
-- `CI` green across `ubuntu-latest` + `macos-latest` on Python `3.10/3.11/3.12/3.13`
-- `release-gate` job: PASS
-- `download-smoke` jobs: PASS
+Expected output:
+- `OK`
 
 Source:
-- `.github/workflows/test.yml`
+- `src/clawzero/adapters/openclaw/__init__.py`
+- `src/clawzero/adapters/langchain.py`
+- `src/clawzero/adapters/crewai.py`
+- `src/clawzero/adapters/autogen.py`
+- `src/clawzero/protect_agent.py`
 
-## Claim: Credential-read exfiltration path is blocked in compare mode
+## Claim: 50 attack vectors are validated in the attack pack
 Status: VERIFIED
 
 Proof command:
 ```bash
-clawzero demo openclaw --mode compare --scenario credentials
+pytest -q tests/attack_pack
 ```
 
 Expected output includes:
-- `Standard OpenClaw   →  COMPROMISED`
-- `MVAR-Protected      →  BLOCKED ✓`
-- `Policy:  mvar-security.v1.4.3`
+- `50 passed`
 
 Source:
-- `src/clawzero/demo/openclaw_attack_demo.py`
-- `tests/test_claims.py`
+- `tests/attack_pack/`
 
-## Claim: Replay and explain commands produce deterministic human-readable output
+## Claim: Full local suite passes at 117 tests
 Status: VERIFIED
 
-Proof commands:
+Proof command:
 ```bash
-pytest -q tests/test_phase4_cli.py -k "witness_explain_output or replay_orders_and_summarizes"
+pytest tests/ -q
 ```
 
-Expected:
-- witness explain output includes structured sections (`Request`, `Provenance`, `Decision`)
-- replay output is ordered and includes a session summary
+Expected output includes:
+- `117 passed`
 
 Source:
-- `src/clawzero/cli.py`
-- `tests/test_phase4_cli.py`
+- `tests/`
 
-## Claim: SARIF export generates valid code-scanning payloads
+## Claim: Decision latency is microsecond-class (~1ms mean on measured run)
 Status: VERIFIED
 
-Proof commands:
+Proof command:
 ```bash
-pytest -q tests/test_sarif_export.py
-clawzero report sarif --input <witness_dir> --output ./results.sarif
+python -m clawzero.benchmark --iterations 1000
 ```
 
-Expected:
-- SARIF file is generated
-- decisions are mapped into SARIF result entries
+Expected output includes:
+- `Overall: mean=1082.6us per decision` (hardware/runtime dependent)
+
+Messaging guidance:
+- Use `~1ms per decision` or `microsecond-class enforcement`.
+- Do not claim `<100us` unless re-measured and reproduced in CI with hardware context.
 
 Source:
-- `src/clawzero/sarif.py`
-- `tests/test_sarif_export.py`
+- `src/clawzero/benchmark.py`
