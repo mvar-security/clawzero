@@ -1,29 +1,10 @@
 """
-ClawZero - Execution Firewall for AI Agents
+ClawZero - Execution Firewall for AI Agents.
 
-ClawZero wraps AI agent tools with MVAR runtime governance,
-blocking attacker-influenced executions at critical sinks.
-
-Example usage:
-    from clawzero import protect
-
-    def read_file(path: str) -> str:
-        with open(path) as f:
-            return f.read()
-
-    safe_read = protect(read_file, sink="filesystem.read", profile="prod_locked")
-
-    # Blocked: /etc/passwd is in blocklist
-    try:
-        safe_read("/etc/passwd")
-    except ExecutionBlocked as e:
-        print(f"Blocked: {e.decision.human_reason}")
-
-    # Allowed: /workspace is in allowlist
-    content = safe_read("/workspace/data.txt")
+Deterministic execution boundary between model output and tool execution.
 """
 
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 
@@ -33,6 +14,10 @@ from clawzero.adapters import (
     LangChainAdapter,
     protect_langchain_tool,
     wrap_langchain_tool,
+    CrewAIAdapter,
+    protect_crewai_tool,
+    AutoGenAdapter,
+    protect_autogen_function,
 )
 from clawzero.exceptions import (
     ClawZeroConfigError,
@@ -42,22 +27,36 @@ from clawzero.exceptions import (
     UnsupportedFrameworkError,
 )
 from clawzero.protect import protect
+from clawzero.protect_agent import protect_agent
+from clawzero.benchmark import run_benchmark
 from clawzero.runtime import MVARRuntime
+from clawzero.doctor import run_openclaw_doctor, format_openclaw_doctor
+from clawzero.sarif import export_sarif
 from clawzero.witness import (
     WitnessGenerator,
     generate_witness,
     get_witness_generator,
     set_witness_output_dir,
 )
+from clawzero.witnesses.verify import (
+    verify_witness_file,
+    verify_witness_chain,
+)
 
 __all__ = [
     # Core API
     "protect",
+    "protect_agent",
+    "run_benchmark",
     "MVARRuntime",
     "OpenClawAdapter",
     "LangChainAdapter",
     "protect_langchain_tool",
     "wrap_langchain_tool",
+    "CrewAIAdapter",
+    "protect_crewai_tool",
+    "AutoGenAdapter",
+    "protect_autogen_function",
     # Contracts
     "ActionRequest",
     "ActionDecision",
@@ -68,11 +67,17 @@ __all__ = [
     "ClawZeroConfigError",
     "ClawZeroRuntimeError",
     "UnsupportedFrameworkError",
-    # Witness generation
+    # Witness generation/validation
     "WitnessGenerator",
     "generate_witness",
     "get_witness_generator",
     "set_witness_output_dir",
+    "verify_witness_file",
+    "verify_witness_chain",
+    # Doctor/reporting
+    "run_openclaw_doctor",
+    "format_openclaw_doctor",
+    "export_sarif",
     # Adapters (optional import)
     "adapters",
 ]

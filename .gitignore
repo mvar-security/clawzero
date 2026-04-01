@@ -148,3 +148,8 @@ Thumbs.db
 
 # ClawZero generated files
 examples/witness_output/
+
+# Keep ClawZero landing page under site/
+!/site/
+/site/*
+!/site/index.html
