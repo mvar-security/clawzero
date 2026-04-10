@@ -14,8 +14,6 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       fail-fast: false
       matrix:
@@ -50,8 +48,6 @@ jobs:
     name: Attack Pack Validation
     runs-on: ubuntu-latest
     needs: test
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v5
@@ -76,7 +72,9 @@ jobs:
         run: |
           clawzero report sarif --input ./witnesses --output clawzero-scan.sarif || true
           if [ ! -f clawzero-scan.sarif ]; then
-            echo '{"$schema":"https://json.schemastore.org/sarif-2.1.0.json","version":"2.1.0","runs":[]}' > clawzero-scan.sarif
+            cat > clawzero-scan.sarif <<'EOF'
+            {"$schema":"https://json.schemastore.org/sarif-2.1.0.json","version":"2.1.0","runs":[{"tool":{"driver":{"name":"clawzero","version":"0.2.1","informationUri":"https://github.com/mvar-security/clawzero","rules":[]}},"results":[]}]}
+            EOF
           fi
 
       - name: Upload SARIF to GitHub Security
@@ -99,8 +97,6 @@ jobs:
     name: Benchmark
     runs-on: ubuntu-latest
     needs: test
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v5
