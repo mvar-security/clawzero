@@ -18,7 +18,7 @@
 
 <p>
 Blocks CVE-2026-25253, malicious ClawHub skills, and persistent memory injection.<br/>
-100% block rate across 50 attack categories. Zero-config API.<br/>
+50/50 deterministic block rate in the validation corpus across 9 attack categories. Zero-config API.<br/>
 <strong>Powered by MVAR, the runtime for secure AI agents.</strong>
 </p>
 

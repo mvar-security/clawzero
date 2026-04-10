@@ -52,7 +52,7 @@ jobs:
           python3 -m venv /tmp/gate_test
           source /tmp/gate_test/bin/activate
           python -m pip install --upgrade pip
-          pip install clawzero==0.1.4
+          pip install clawzero==0.2.0
 
           clawzero doctor openclaw | tee /tmp/doctor.out
           grep -q "Status: SECURE" /tmp/doctor.out
@@ -80,7 +80,7 @@ jobs:
           python3 -m venv /tmp/download_smoke
           source /tmp/download_smoke/bin/activate
           python -m pip install --upgrade pip
-          pip install --no-cache-dir clawzero==0.1.4
+          pip install --no-cache-dir clawzero==0.2.0
 
           clawzero doctor openclaw | tee /tmp/doctor.out
           grep -q "Status: SECURE" /tmp/doctor.out

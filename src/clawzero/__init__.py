@@ -4,7 +4,7 @@ ClawZero - Execution Firewall for AI Agents.
 Deterministic execution boundary between model output and tool execution.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "MVAR Security"
 __license__ = "Apache-2.0"
 

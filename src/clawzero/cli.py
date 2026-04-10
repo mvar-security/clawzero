@@ -164,7 +164,7 @@ def _sink_risk(sink_type: str) -> str:
 
 def _decision_symbol(decision: str) -> str:
     if decision == "block":
-        return "BLOCKED ✕"
+        return "BLOCKED ✓"
     if decision == "allow":
         return "ALLOWED ✓"
     return "ANNOTATED ⚠"
@@ -468,7 +468,7 @@ def _cmd_attack_test(args: argparse.Namespace) -> int:
     print("")
     for name, request in scenarios:
         decision = runtime.evaluate(request)
-        status = "BLOCKED ✕" if decision.decision == "block" else "FAILED ⚠"
+        status = "BLOCKED ✓" if decision.decision == "block" else "FAILED ⚠"
         if decision.decision == "block":
             blocked += 1
         print(f"{name + ':':<34} {status}")
