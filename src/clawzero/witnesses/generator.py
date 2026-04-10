@@ -265,11 +265,11 @@ class WitnessGenerator:
             return f"ed25519:{signature.hex()}"
 
         # Compatibility fallback when cryptography is unavailable.
-        payload = (
+        fallback_payload = (
             f"{witness_id}:{request.request_id}:{decision.sink_type}:"
             f"{decision.decision}:{decision.reason_code}:{decision.policy_id}:{decision.engine}"
         )
-        signature_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+        signature_hash = hashlib.sha256(fallback_payload.encode("utf-8")).hexdigest()[:16]
         return f"ed25519_stub:{signature_hash}"
 
     def _signature_payload(
