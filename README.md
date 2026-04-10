@@ -29,7 +29,8 @@ ClawZero enforces policy between model output and tool execution.
 
 <p>
 <a href="https://pypi.org/project/clawzero/"><strong>Install from PyPI</strong></a> •
-<a href="docs/index.md"><strong>Documentation</strong></a>
+<a href="docs/index.md"><strong>Documentation</strong></a> •
+<a href="docs/integration-quickstarts.md"><strong>Integration Quickstarts</strong></a>
 </p>
 
 <p>
@@ -44,7 +45,8 @@ ClawZero enforces policy between model output and tool execution.
 **Execution boundary for OpenClaw agents. Powered by MVAR.**
 
 ```bash
-pip install clawzero
+pip install clawzero==0.2.0
+clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
 
@@ -63,13 +65,19 @@ ClawZero places a deterministic execution boundary between model output and tool
 ## 30-Second Quickstart
 
 ```bash
-pip install clawzero
+pip install clawzero==0.2.0
+clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
 
 Expected output:
 
 ```text
+Runtime......... OK (mvar-security 1.4.3)
+Witness......... OK (chain valid)
+Demo............ OK (attack blocked)
+Status: SECURE
+
 STANDARD OPENCLAW  →  COMPROMISED
 MVAR-PROTECTED     →  BLOCKED ✓
 Witness generated  →  YES
@@ -87,7 +95,7 @@ ClawZero blocks exploitation at the execution boundary before credentials leak, 
 |-----------|------------------|---------|
 | #1 WebSocket RCE | `trusted_websocket_origins` checks + exposure diagnostics | `clawzero doctor openclaw` |
 | #3 Malicious Skills | `UNSIGNED_MARKETPLACE_PACKAGE` enforcement in `prod_locked` | `clawzero audit decision --profile prod_locked --sink-type tool.custom --target install_skill --package-source clawhub --package-hash sha256:deadbeef --publisher-id unknown-publisher` |
-| #4 Credential exfil | Critical file-read boundary enforcement | `clawzero demo openclaw --mode compare --scenario credentials` |
+| #4 Credential exfil | Credential sink boundary enforcement | `clawzero demo openclaw --mode compare --scenario credentials` |
 | #5 Persistent memory | Temporal taint tracking with delayed-trigger enforcement mode | `pytest -q tests/test_phaseC_temporal_taint.py` |
 | #6 Shadow AI | Witness artifacts + `doctor` posture checks | `clawzero doctor openclaw` |
 
@@ -177,6 +185,15 @@ CrewAI and AutoGen adapters are now included alongside OpenClaw and LangChain:
 ```python
 from clawzero.adapters.crewai import protect_crewai_tool
 from clawzero.adapters.autogen import protect_autogen_function
+```
+
+MCP adapter alpha is now available:
+
+```python
+from clawzero.adapters.mcp import MCPAdapter
+
+adapter = MCPAdapter(profile="prod_locked")
+safe_client = adapter.wrap_client(mcp_client, method_name="call_tool")
 ```
 
 ## Attack Pack Validation (50 Vectors)
@@ -303,11 +320,14 @@ The attack demonstrations show how enforcement works; they are not tools for per
 
 Command families map to enforcement jobs:
 
+- `clawzero prove` - run install-to-proof validation in one command
 - `clawzero demo` - run side-by-side enforcement proof demos
 - `clawzero witness` - inspect and validate witness artifacts
 - `clawzero audit` - evaluate deterministic decisions for sink requests
 - `clawzero attack` - replay known attack scenarios as enforcement proofs
 - `clawzero report` - export witness artifacts to SARIF for code scanning
+
+Note: `clawzero prove` is available on the main branch and will be included in the next PyPI release.
 
 ## Zero-Config API
 

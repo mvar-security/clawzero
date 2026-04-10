@@ -264,6 +264,7 @@
     <div class="container">
         <a href="/" class="logo">ClawZero <span>by MVAR</span></a>
         <div>
+            <a href="#prove">Prove It</a>
             <a href="#how">How It Works</a>
             <a href="#compare">Compare</a>
             <a href="https://github.com/mvar-security/clawzero">GitHub</a>
@@ -292,10 +293,23 @@
         </div>
 
         <div class="install-strip">
-            <span class="dollar">$</span> pip install clawzero
+            <span class="dollar">$</span> pip install clawzero==0.2.0
         </div>
     </div>
 </div>
+
+<section id="prove">
+    <div class="container">
+        <h2>Prove it in <em>30 seconds</em>.</h2>
+        <p>Install, run one command, and verify your execution boundary is active with signed witness output.</p>
+
+        <div class="code-hero">
+            pip install clawzero==0.2.0<br>
+            clawzero doctor openclaw<br>
+            clawzero demo openclaw --mode compare --scenario shell
+        </div>
+    </div>
+</section>
 
 <section id="how">
     <div class="container">
@@ -330,11 +344,11 @@
                 <div class="label">Attack categories</div>
             </div>
             <div class="stat">
-                <div class="number">100%</div>
-                <div class="label">Block rate (deterministic)</div>
+                <div class="number">50/50</div>
+                <div class="label">Validation corpus blocked (deterministic rules)</div>
             </div>
             <div class="stat">
-                <div class="number">&lt;100us</div>
+                <div class="number">~1ms</div>
                 <div class="label">Per-decision latency</div>
             </div>
         </div>
@@ -362,7 +376,7 @@
                     <td class="yes">Yes — deterministic</td>
                     <td class="yes">Signed witness trail</td>
                     <td class="yes">Policy is code, not model</td>
-                    <td>&lt;100us</td>
+                    <td>~1ms</td>
                 </tr>
                 <tr>
                     <td>LLM-as-judge</td>
@@ -419,6 +433,10 @@
             <div class="card">
                 <h3>Any Function</h3>
                 <p><code>from clawzero import protect</code><br>Wrap any callable.</p>
+            </div>
+            <div class="card">
+                <h3>MCP (Alpha)</h3>
+                <p><code>from clawzero.adapters.mcp import MCPAdapter</code></p>
             </div>
         </div>
     </div>

@@ -147,6 +147,15 @@ class MVARRuntime:
                 "ledger_signer_detail": None,
             }
 
+        if isinstance(self.last_witness, dict):
+            signature = str(self.last_witness.get("witness_signature", ""))
+            if signature.startswith("ed25519:"):
+                return {
+                    "witness_signer": "Ed25519 (native) ✓",
+                    "ledger_signer": "N/A (embedded fallback)",
+                    "ledger_signer_detail": None,
+                }
+
         return {
             "witness_signer": "ed25519_stub (embedded fallback)",
             "ledger_signer": "N/A (embedded fallback)",

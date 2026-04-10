@@ -21,7 +21,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 
-from clawzero import protect, ExecutionBlocked, set_witness_output_dir  # noqa: E402
+from clawzero import InputClass, protect, ExecutionBlocked, set_witness_output_dir  # noqa: E402
 
 # Enable witness JSON output
 WITNESS_DIR = Path(__file__).parent / "witness_output"
@@ -122,24 +122,39 @@ def make_http_request_unsafe(url: str) -> str:
 # ============================================================================
 
 read_file_protected = protect(
-    read_file_unsafe, sink="filesystem.read", profile="prod_locked"
+    read_file_unsafe,
+    sink="filesystem.read",
+    profile="prod_locked",
+    input_class=InputClass.UNTRUSTED,
 )
 
 execute_shell_protected = protect(
-    execute_shell_unsafe, sink="shell.exec", profile="prod_locked"
+    execute_shell_unsafe,
+    sink="shell.exec",
+    profile="prod_locked",
+    input_class=InputClass.UNTRUSTED,
 )
 
 access_credentials_protected = protect(
-    access_credentials_unsafe, sink="credentials.access", profile="prod_locked"
+    access_credentials_unsafe,
+    sink="credentials.access",
+    profile="prod_locked",
+    input_class=InputClass.UNTRUSTED,
 )
 
 make_http_request_protected = protect(
-    make_http_request_unsafe, sink="http.request", profile="prod_locked"
+    make_http_request_unsafe,
+    sink="http.request",
+    profile="prod_locked",
+    input_class=InputClass.UNTRUSTED,
 )
 
 # For benign HTTP demo, use dev_balanced (allows HTTP)
 make_http_request_benign = protect(
-    make_http_request_unsafe, sink="http.request", profile="dev_balanced"
+    make_http_request_unsafe,
+    sink="http.request",
+    profile="dev_balanced",
+    input_class=InputClass.TRUSTED,
 )
 
 

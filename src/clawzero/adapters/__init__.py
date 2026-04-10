@@ -13,6 +13,7 @@ from clawzero.adapters.langchain import (
 )
 from clawzero.adapters.crewai import CrewAIAdapter, protect_crewai_tool
 from clawzero.adapters.autogen import AutoGenAdapter, protect_autogen_function
+from clawzero.adapters.mcp import MCPAdapter, protect_mcp_call, infer_mcp_sink
 
 __all__ = [
     "OpenClawAdapter",
@@ -24,4 +25,7 @@ __all__ = [
     "protect_crewai_tool",
     "AutoGenAdapter",
     "protect_autogen_function",
+    "MCPAdapter",
+    "protect_mcp_call",
+    "infer_mcp_sink",
 ]

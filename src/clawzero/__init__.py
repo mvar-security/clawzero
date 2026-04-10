@@ -18,6 +18,9 @@ from clawzero.adapters import (
     protect_crewai_tool,
     AutoGenAdapter,
     protect_autogen_function,
+    MCPAdapter,
+    protect_mcp_call,
+    infer_mcp_sink,
 )
 from clawzero.exceptions import (
     ClawZeroConfigError,
@@ -57,6 +60,9 @@ __all__ = [
     "protect_crewai_tool",
     "AutoGenAdapter",
     "protect_autogen_function",
+    "MCPAdapter",
+    "protect_mcp_call",
+    "infer_mcp_sink",
     # Contracts
     "ActionRequest",
     "ActionDecision",

@@ -6,6 +6,7 @@ Every enforcement decision emits a signed witness artifact.
 
 import hashlib
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,9 @@ class WitnessGenerator:
         self._counter = 0
         self._last_content_hash: Optional[str] = None
         self._last_chain_index = 0
+        self._ed25519_private_key: Any | None = None
+        self._signing_mode = "ed25519_stub"
+        self._initialize_signer()
 
     def generate(self, request: ActionRequest, decision: ActionDecision) -> dict:
         witness_id = str(uuid.uuid4())
@@ -255,12 +259,71 @@ class WitnessGenerator:
         if isinstance(mvar_signature, str) and mvar_signature:
             return mvar_signature
 
+        if self._signing_mode == "ed25519" and self._ed25519_private_key is not None:
+            payload = self._signature_payload(witness_id, request, decision)
+            signature = self._ed25519_private_key.sign(payload)
+            return f"ed25519:{signature.hex()}"
+
+        # Compatibility fallback when cryptography is unavailable.
         payload = (
             f"{witness_id}:{request.request_id}:{decision.sink_type}:"
             f"{decision.decision}:{decision.reason_code}:{decision.policy_id}:{decision.engine}"
         )
         signature_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         return f"ed25519_stub:{signature_hash}"
+
+    def _signature_payload(
+        self, witness_id: str, request: ActionRequest, decision: ActionDecision
+    ) -> bytes:
+        payload = (
+            f"{witness_id}:{request.request_id}:{decision.sink_type}:"
+            f"{decision.decision}:{decision.reason_code}:{decision.policy_id}:{decision.engine}"
+        )
+        return payload.encode("utf-8")
+
+    def _initialize_signer(self) -> None:
+        try:
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+                Ed25519PrivateKey,
+            )
+        except Exception:
+            self._signing_mode = "ed25519_stub"
+            self._ed25519_private_key = None
+            return
+
+        key_path = self._resolve_key_path()
+        try:
+            key_path.parent.mkdir(parents=True, exist_ok=True)
+            if key_path.exists():
+                key_bytes = key_path.read_bytes()
+                self._ed25519_private_key = serialization.load_pem_private_key(
+                    key_bytes,
+                    password=None,
+                )
+            else:
+                private_key = Ed25519PrivateKey.generate()
+                pem_bytes = private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
+                key_path.write_bytes(pem_bytes)
+                try:
+                    os.chmod(key_path, 0o600)
+                except OSError:
+                    pass
+                self._ed25519_private_key = private_key
+            self._signing_mode = "ed25519"
+        except Exception:
+            self._signing_mode = "ed25519_stub"
+            self._ed25519_private_key = None
+
+    def _resolve_key_path(self) -> Path:
+        explicit = os.getenv("CLAWZERO_WITNESS_KEY_PATH")
+        if explicit:
+            return Path(explicit).expanduser().resolve()
+        return (Path.home() / ".clawzero" / "keys" / "witness_ed25519_private_key.pem").resolve()
 
     def _resolve_chain_state(self) -> tuple[int, str]:
         if self.output_dir is None:
