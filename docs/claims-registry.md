@@ -17,6 +17,10 @@ README/site/HN copy.
 | Session escalation auto-upgrades profile | `tests/test_session_runtime.py::test_profile_auto_escalates_balanced_to_strict` | PASS |
 | Session isolation (no cross-session taint bleed) | `tests/test_session_runtime.py::test_cross_session_isolation` | PASS |
 | Engine supports optional session enrichment path | `tests/test_session_runtime.py::test_engine_evaluate_with_session_enriches_decision` | PASS |
+| Policy matrix contract (source × taint × sink × profile) | `tests/test_policy_matrix_generated.py` | PASS |
+| Witness generated for every policy matrix decision | `tests/test_witness_integrity_matrix.py::test_witness_generated_for_matrix_case` | PASS |
+| Witness signatures present for policy matrix decisions | `tests/test_witness_integrity_matrix.py::test_witness_signature_present_for_matrix_case` | PASS |
+| Witness causal trace preserved across policy matrix | `tests/test_witness_integrity_matrix.py::test_witness_causal_trace_for_matrix_case` | PASS |
 | `clawzero keys show` exposes signer identity | `tests/test_cli_session_wrap.py::test_keys_show_prints_public_key` | PASS |
 | `clawzero wrap` blocks pre-exec on policy violation | `tests/test_cli_session_wrap.py::test_wrap_block_path_does_not_execute_subprocess` | PASS |
 | `clawzero wrap` executes allowed command path | `tests/test_cli_session_wrap.py::test_wrap_allow_path_executes_subprocess` | PASS |
