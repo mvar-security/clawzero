@@ -58,6 +58,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 500,
         "paths": ("tests/performance/test_latency_generated.py",),
     },
+    {
+        "name": "Fuzzing Corpus",
+        "expected": 1000,
+        "paths": ("tests/fuzzing/test_engine_fuzz_generated.py",),
+    },
 )
 
 
