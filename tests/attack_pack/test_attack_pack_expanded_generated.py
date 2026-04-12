@@ -99,6 +99,13 @@ def _effective_profile(profile: str, taint_level: str) -> str:
     return profile
 
 
+def _expected_witness_taint_level(taint_level: str) -> str:
+    # Engine contract: unknown and untrusted inputs normalize to untrusted.
+    if taint_level in {"unknown", "untrusted"}:
+        return "untrusted"
+    return taint_level
+
+
 def _target_for(category: str, sink_type: str, variant: int) -> str:
     if sink_type == "shell.exec":
         return (
@@ -201,7 +208,24 @@ def test_expanded_attack_pack_blocks(case: ExpandedAttackCase) -> None:
     decision = runtime.evaluate(request)
 
     assert decision.decision == "block"
+    assert decision.sink_type == case.category.sink_type
+    assert decision.target == case.target
     assert decision.reason_code == case.category.expected_reason_code
     assert decision.annotations.get("effective_policy_profile") == case.expected_profile
-    assert runtime.last_witness is not None
 
+    witness = runtime.last_witness
+    assert isinstance(witness, dict)
+    assert witness.get("request_id") == decision.request_id
+    assert witness.get("decision") == "block"
+    assert witness.get("reason_code") == case.category.expected_reason_code
+    assert witness.get("sink_type") == case.category.sink_type
+    assert witness.get("target") == case.target
+
+    provenance = witness.get("provenance")
+    assert isinstance(provenance, dict)
+    assert provenance.get("source") == f"{case.category.name}_payload"
+    assert provenance.get("taint_level") == _expected_witness_taint_level(case.taint_level)
+    markers = provenance.get("taint_markers")
+    assert isinstance(markers, list)
+    assert case.category.name in markers
+    assert f"variant_{case.variant:02d}" in markers
