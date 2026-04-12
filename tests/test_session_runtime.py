@@ -9,14 +9,10 @@ from pathlib import Path
 
 import pytest
 
-for module_name in list(sys.modules):
-    if module_name == "clawzero" or module_name.startswith("clawzero."):
-        sys.modules.pop(module_name)
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from clawzero.contracts import ActionDecision, ActionRequest, InputClass  # noqa: E402
-from clawzero.runtime import AgentSession, MVARRuntime  # noqa: E402
+from clawzero.contracts import ActionDecision, ActionRequest, InputClass
+from clawzero.runtime import AgentSession, MVARRuntime
 
 
 def _decision(

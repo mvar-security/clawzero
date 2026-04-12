@@ -11,16 +11,12 @@ from pathlib import Path
 
 import pytest
 
-for module_name in list(sys.modules):
-    if module_name == "clawzero" or module_name.startswith("clawzero."):
-        sys.modules.pop(module_name)
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from clawzero import cli  # noqa: E402
-from clawzero.contracts import ActionDecision  # noqa: E402
-from clawzero.runtime.session import AgentSession  # noqa: E402
-from clawzero.witnesses.generator import WitnessGenerator  # noqa: E402
+from clawzero import cli
+from clawzero.contracts import ActionDecision
+from clawzero.runtime.session import AgentSession
+from clawzero.witnesses.generator import WitnessGenerator
 
 
 @pytest.fixture(autouse=True)

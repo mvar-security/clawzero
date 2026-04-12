@@ -6,13 +6,9 @@ import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-for module_name in list(sys.modules):
-    if module_name == "clawzero" or module_name.startswith("clawzero."):
-        sys.modules.pop(module_name)
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from clawzero.runtime.chain_patterns import (  # noqa: E402
+from clawzero.runtime.chain_patterns import (
     CHAIN_THRESHOLDS,
     ChainDetector,
     ChainPattern,
