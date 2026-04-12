@@ -78,6 +78,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 50,
         "paths": ("tests/session/test_cross_session_isolation_generated.py",),
     },
+    {
+        "name": "SARIF + Witness Export",
+        "expected": 300,
+        "paths": ("tests/exports/test_sarif_witness_export_generated.py",),
+    },
 )
 
 
