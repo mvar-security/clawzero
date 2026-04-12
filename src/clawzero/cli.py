@@ -73,6 +73,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 250,
         "paths": ("tests/adapters/test_framework_adapter_matrix_generated.py",),
     },
+    {
+        "name": "Cross-Session Isolation",
+        "expected": 50,
+        "paths": ("tests/session/test_cross_session_isolation_generated.py",),
+    },
 )
 
 
