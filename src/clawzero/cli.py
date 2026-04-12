@@ -709,12 +709,15 @@ def _cmd_keys_show(_args: argparse.Namespace) -> int:
 
     try:
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
         private_key = serialization.load_pem_private_key(
             key_path.read_bytes(),
             password=None,
         )
+        if not isinstance(private_key, Ed25519PrivateKey):
+            raise TypeError("witness signing key is not Ed25519")
         public_bytes = private_key.public_key().public_bytes(
             encoding=Encoding.Raw,
             format=PublicFormat.Raw,
@@ -754,11 +757,14 @@ def _sign_compliance_payload(payload: dict[str, Any]) -> str:
             WitnessGenerator(output_dir=None)
 
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
         private_key = serialization.load_pem_private_key(
             key_path.read_bytes(),
             password=None,
         )
+        if not isinstance(private_key, Ed25519PrivateKey):
+            raise TypeError("witness signing key is not Ed25519")
         signature = private_key.sign(canonical)
         return f"ed25519:{base64.b64encode(signature).decode('ascii')}"
     except Exception:
