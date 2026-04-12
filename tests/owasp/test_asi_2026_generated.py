@@ -32,6 +32,14 @@ class ASIControl:
     expected_reason_code: str
 
 
+@dataclass(frozen=True)
+class ASIControlMappingContract:
+    control_id: str
+    modeled_sink_type: str
+    modeled_reason_code: str
+    scope_note: str
+
+
 ASI_CONTROLS: tuple[ASIControl, ...] = (
     ASIControl("ASI-01", "Prompt Injection", "shell.exec", "bash_execute", "UNTRUSTED_TO_CRITICAL_SINK"),
     ASIControl("ASI-02", "Insecure Output Handling", "http.request", "http_post", "DOMAIN_BLOCKED"),
@@ -43,6 +51,69 @@ ASI_CONTROLS: tuple[ASIControl, ...] = (
     ASIControl("ASI-08", "Data Exfiltration", "credentials.access", "get_secret", "CREDENTIAL_ACCESS_BLOCKED"),
     ASIControl("ASI-09", "Denial of Service", "shell.exec", "bash_execute", "UNTRUSTED_TO_CRITICAL_SINK"),
     ASIControl("ASI-10", "Rogue Agent Behavior", "shell.exec", "bash_execute", "UNTRUSTED_TO_CRITICAL_SINK"),
+)
+
+ASI_CONTROL_MAPPING_CONTRACTS: tuple[ASIControlMappingContract, ...] = (
+    ASIControlMappingContract(
+        "ASI-01",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Prompt injection is modeled as untrusted data reaching shell execution sink.",
+    ),
+    ASIControlMappingContract(
+        "ASI-02",
+        "http.request",
+        "DOMAIN_BLOCKED",
+        "Insecure output handling is modeled as outbound HTTP exfiltration boundary.",
+    ),
+    ASIControlMappingContract(
+        "ASI-03",
+        "credentials.access",
+        "CREDENTIAL_ACCESS_BLOCKED",
+        "Identity/authorization risk is modeled as credential sink access.",
+    ),
+    ASIControlMappingContract(
+        "ASI-04",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Tool/resource misuse is modeled as unsafe shell execution boundary.",
+    ),
+    ASIControlMappingContract(
+        "ASI-05",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Supply chain risk is modeled as untrusted install/exec path to shell sink.",
+    ),
+    ASIControlMappingContract(
+        "ASI-06",
+        "filesystem.read",
+        "PATH_BLOCKED",
+        "Memory/context manipulation is modeled as sensitive filesystem read access.",
+    ),
+    ASIControlMappingContract(
+        "ASI-07",
+        "http.request",
+        "DOMAIN_BLOCKED",
+        "Cascading failures are modeled as outbound HTTP sink behavior.",
+    ),
+    ASIControlMappingContract(
+        "ASI-08",
+        "credentials.access",
+        "CREDENTIAL_ACCESS_BLOCKED",
+        "Data exfiltration is modeled as credential extraction; non-credential exfil is out of scope here.",
+    ),
+    ASIControlMappingContract(
+        "ASI-09",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "DoS is modeled as untrusted command execution pressure on critical sink.",
+    ),
+    ASIControlMappingContract(
+        "ASI-10",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Rogue behavior is modeled as untrusted autonomous shell execution.",
+    ),
 )
 
 SCENARIOS_PER_CONTROL = 50
@@ -67,6 +138,20 @@ class ASICase:
             f"{self.control.control_id.lower()}__"
             f"s{self.scenario_index:02d}__{self.taint_level}__{self.profile}"
         )
+
+
+def _expected_witness_taint_level(taint_level: str) -> str:
+    # Engine contract: unknown and untrusted inputs normalize to untrusted.
+    if taint_level in {"unknown", "untrusted"}:
+        return "untrusted"
+    return taint_level
+
+
+def _mapping_contract_for(control_id: str) -> ASIControlMappingContract:
+    for contract in ASI_CONTROL_MAPPING_CONTRACTS:
+        if contract.control_id == control_id:
+            return contract
+    raise KeyError(f"Missing ASI mapping contract for {control_id}")
 
 
 def _target_for(control: ASIControl, scenario_index: int) -> str:
@@ -116,6 +201,7 @@ def _runtime(profile: str) -> MVARRuntime:
 def test_asi_2026_control_enforcement(case: ASICase) -> None:
     runtime = _runtime(case.profile)
     target = _target_for(case.control, case.scenario_index)
+    contract = _mapping_contract_for(case.control.control_id)
 
     request = ActionRequest(
         request_id=str(uuid.uuid4()),
@@ -145,7 +231,45 @@ def test_asi_2026_control_enforcement(case: ASICase) -> None:
 
     decision = runtime.evaluate(request)
     assert decision.decision == "block"
+    assert decision.sink_type == case.control.sink_type
+    assert decision.target == target
     assert decision.reason_code == case.control.expected_reason_code
+    assert decision.reason_code == contract.modeled_reason_code
     assert decision.annotations.get("effective_policy_profile") == case.expected_profile
-    assert runtime.last_witness is not None
+    witness = runtime.last_witness
+    assert isinstance(witness, dict)
+    assert witness.get("request_id") == decision.request_id
+    assert witness.get("decision") == "block"
+    assert witness.get("reason_code") == case.control.expected_reason_code
+    assert witness.get("sink_type") == case.control.sink_type
+    assert witness.get("target") == target
 
+    provenance = witness.get("provenance")
+    assert isinstance(provenance, dict)
+    assert provenance.get("source") == f"asi_2026_{case.control.control_id.lower()}"
+    assert provenance.get("taint_level") == _expected_witness_taint_level(case.taint_level)
+    markers = provenance.get("taint_markers")
+    assert isinstance(markers, list)
+    assert "asi_2026" in markers
+    assert case.control.control_id.lower() in markers
+    assert f"scenario_{case.scenario_index:02d}" in markers
+
+
+def test_asi_mapping_contract_explicit_and_complete() -> None:
+    """OWASP-to-engine mapping assumptions are explicit and complete."""
+    control_ids = {control.control_id for control in ASI_CONTROLS}
+    contract_ids = {contract.control_id for contract in ASI_CONTROL_MAPPING_CONTRACTS}
+    assert contract_ids == control_ids
+
+    for control in ASI_CONTROLS:
+        contract = _mapping_contract_for(control.control_id)
+        assert control.sink_type == contract.modeled_sink_type
+        assert control.expected_reason_code == contract.modeled_reason_code
+        assert contract.scope_note.strip()
+
+
+def test_asi_cross_category_taint_chain_coverage_gap_is_explicit() -> None:
+    pytest.skip(
+        "Gap (explicit): this generated ASI suite validates per-control primary sink contracts only. "
+        "Cross-category taint-chain scenarios are not exercised in this file."
+    )
