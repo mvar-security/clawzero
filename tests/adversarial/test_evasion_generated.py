@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 from clawzero.contracts import ActionRequest, InputClass
 from clawzero.runtime import AgentSession, MVARRuntime
+from clawzero.runtime.chain_patterns import CHAIN_THRESHOLDS
 
 PROFILES: tuple[str, ...] = ("dev_balanced", "dev_strict", "prod_locked")
 TECHNIQUE_COUNT = 100
@@ -219,6 +220,13 @@ def _input_class_for(taint_level: str) -> str:
     return InputClass.UNTRUSTED.value
 
 
+def _expected_witness_taint_level(case: EvasionCase) -> str:
+    # Engine contract: unknown and untrusted inputs are normalized to untrusted.
+    if case.taint_level in {"unknown", "untrusted"}:
+        return "untrusted"
+    return case.taint_level
+
+
 def _runtime(profile: str, witness_dir: Path) -> MVARRuntime:
     runtime = MVARRuntime(profile=profile, witness_dir=witness_dir)
     runtime._mvar_available = False
@@ -284,25 +292,59 @@ def test_adversarial_evasion_cases_block_and_detect(case: EvasionCase, tmp_path:
         decisions.append(decision)
         assert decision.decision == "block"
         assert decision.reason_code == case.category.expected_reason_code
+        assert decision.sink_type == case.category.sink_type
         assert decision.annotations.get("effective_policy_profile") == case.expected_profile
-        assert runtime.last_witness is not None
+        witness = runtime.last_witness
+        assert isinstance(witness, dict)
+        assert witness.get("request_id") == decision.request_id
+        assert witness.get("decision") == "block"
+        assert witness.get("reason_code") == case.category.expected_reason_code
+        assert witness.get("sink_type") == case.category.sink_type
+        provenance = witness.get("provenance")
+        assert isinstance(provenance, dict)
+        assert provenance.get("taint_level") == _expected_witness_taint_level(case)
+        markers = provenance.get("taint_markers")
+        assert isinstance(markers, list)
+        assert case.technique.label in markers
+        assert f"stage_{stage}" in markers
 
     final_session = decisions[-1].annotations.get("session", {})
-    chain_patterns = {
-        detection.get("pattern")
-        for detection in final_session.get("chain_detections", [])
-        if isinstance(detection, dict)
-    }
+    detections = [d for d in final_session.get("chain_detections", []) if isinstance(d, dict)]
+    chain_patterns = {detection.get("pattern") for detection in detections}
     assert "taint_continuity" in chain_patterns
+
+    taint_detections = [d for d in detections if d.get("pattern") == "taint_continuity"]
+    assert taint_detections
+    request_ids = {decision.request_id for decision in decisions}
+    min_untrusted_count = int(CHAIN_THRESHOLDS[case.expected_profile]["min_untrusted_count"])
+    for detection in taint_detections:
+        evidence = detection.get("evidence")
+        assert isinstance(evidence, list)
+        assert len(evidence) >= min_untrusted_count
+        assert set(evidence).issubset(request_ids)
 
     # Explicit evasion contract: source ID fragmentation must still trigger continuity detection.
     if case.technique.family == "source_id_fragmentation":
         stage_sources = [decision.annotations["session"]["source_id"] for decision in decisions]
         assert len(set(stage_sources)) == CHAIN_DEPTH
+        assert any(
+            "source-independent" in str(detection.get("primary_signal", ""))
+            for detection in taint_detections
+        )
 
     report = session.get_session_report()
     assert report["total_calls"] == CHAIN_DEPTH
     assert report["blocked_calls"] == CHAIN_DEPTH
     assert report["witness_chain_length"] == CHAIN_DEPTH
-    assert report["chain_detector"]["detections"]
+    chain_detector_report = report["chain_detector"]
+    assert chain_detector_report["events"] == CHAIN_DEPTH
+    assert chain_detector_report["detections"]
+    assert any(
+        detection.get("pattern") == "taint_continuity"
+        for detection in chain_detector_report["detections"]
+    )
 
+    log_path = Path(report["log_path"])
+    assert log_path.exists()
+    with log_path.open("r", encoding="utf-8") as handle:
+        assert sum(1 for _ in handle) == CHAIN_DEPTH
