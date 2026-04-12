@@ -30,4 +30,5 @@ Use the attack demo as **proof of enforcement**, not as the product center.
 ## Operator Docs
 
 - [Integration Quickstarts](integration-quickstarts.md)
+- [Test Authoring Guide](test-authoring-guide.md)
 - [Claims Registry](claims-registry.md)

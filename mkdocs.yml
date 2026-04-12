@@ -17,6 +17,7 @@ nav:
   - Policies: policies.md
   - OpenClaw Integration: openclaw-integration.md
   - Integration Quickstarts: integration-quickstarts.md
+  - Test Authoring Guide: test-authoring-guide.md
   - Claims Registry: claims-registry.md
   - Release Checklist: release-checklist.md
   - GitHub Launch Copy: github-profile-copy.md
