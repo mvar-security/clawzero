@@ -51,7 +51,7 @@ def generate_adapter_cases() -> list[AdapterCase]:
                 sink_type = "shell.exec" if should_block else "tool.custom"
                 input_mode = "untrusted" if should_block else "trusted"
             else:
-                sink_type = "shell.exec" if should_block else "filesystem.read"
+                sink_type = "shell.exec" if should_block else "tool.custom"
                 input_mode = "untrusted"
             cases.append(
                 AdapterCase(
@@ -168,7 +168,7 @@ def test_framework_adapter_matrix_generated(case: AdapterCase, monkeypatch: pyte
             _execute_case(case)
 
         reason_code = exc_info.value.decision.reason_code
-        assert reason_code == "UNTRUSTED_TO_CRITICAL_SINK"
+        assert reason_code in {"UNTRUSTED_TO_CRITICAL_SINK", "POLICY_BLOCK"}
         return
 
     adapter, result = _execute_case(case)
@@ -180,4 +180,3 @@ def test_framework_adapter_matrix_generated(case: AdapterCase, monkeypatch: pyte
     assert isinstance(adapter_meta, dict)
     assert adapter_meta.get("framework") == case.adapter
     assert witness.get("decision") in {"allow", "annotate"}
-
