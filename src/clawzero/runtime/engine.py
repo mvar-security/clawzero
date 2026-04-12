@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+import os
 from dataclasses import replace
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
@@ -167,6 +168,12 @@ class MVARRuntime:
 
     def _try_load_mvar(self) -> bool:
         """Try loading mvar-security governor and detect version."""
+        forced_mode = os.getenv("CLAWZERO_ENGINE_MODE", "").strip().lower()
+        if forced_mode in {"embedded", "fallback", "force_embedded"}:
+            logger.info("CLAWZERO_ENGINE_MODE=%s forcing embedded engine", forced_mode)
+            self._mvar_governor = None
+            return False
+
         try:
             captured_output = io.StringIO()
             with contextlib.redirect_stdout(captured_output), contextlib.redirect_stderr(

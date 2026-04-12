@@ -88,6 +88,21 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 1008,
         "paths": ("tests/fuzzing/test_engine_fuzz_extended_generated.py",),
     },
+    {
+        "name": "Adapter Filesystem Contracts",
+        "expected": 60,
+        "paths": ("tests/adapters/test_filesystem_contract_generated.py",),
+    },
+    {
+        "name": "SARIF Official Schema Contracts",
+        "expected": 7,
+        "paths": ("tests/exports/test_sarif_official_schema_contract.py",),
+    },
+    {
+        "name": "Engine Parity Contracts",
+        "expected": 7,
+        "paths": ("tests/runtime/test_engine_parity_contract.py",),
+    },
 )
 
 
