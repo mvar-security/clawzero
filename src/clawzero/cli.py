@@ -53,6 +53,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 900,
         "paths": ("tests/adversarial/test_evasion_generated.py",),
     },
+    {
+        "name": "Performance & Latency",
+        "expected": 500,
+        "paths": ("tests/performance/test_latency_generated.py",),
+    },
 )
 
 
