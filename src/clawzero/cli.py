@@ -68,6 +68,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 400,
         "paths": ("tests/compliance/test_eu_ai_act_generated.py",),
     },
+    {
+        "name": "Framework Adapter Matrix",
+        "expected": 250,
+        "paths": ("tests/adapters/test_framework_adapter_matrix_generated.py",),
+    },
 )
 
 
