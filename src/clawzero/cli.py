@@ -48,6 +48,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 1296,
         "paths": ("tests/test_witness_integrity_matrix.py",),
     },
+    {
+        "name": "Adversarial Evasion",
+        "expected": 900,
+        "paths": ("tests/adversarial/test_evasion_generated.py",),
+    },
 )
 
 
