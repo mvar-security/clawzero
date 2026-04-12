@@ -63,6 +63,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 1000,
         "paths": ("tests/fuzzing/test_engine_fuzz_generated.py",),
     },
+    {
+        "name": "EU AI Act Mapping",
+        "expected": 400,
+        "paths": ("tests/compliance/test_eu_ai_act_generated.py",),
+    },
 )
 
 
