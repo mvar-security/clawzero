@@ -25,6 +25,7 @@ sys.path.insert(
 from clawzero.adapters import AutoGenAdapter, CrewAIAdapter, LangChainAdapter, MCPAdapter, OpenClawAdapter
 from clawzero.contracts import InputClass
 from clawzero.exceptions import ExecutionBlocked
+from clawzero.runtime import MVARRuntime
 
 SAFE_PATHS: tuple[str, ...] = (
     "/workspace/project/report_01.md",
@@ -42,6 +43,11 @@ TRAVERSAL_PATHS: tuple[str, ...] = (
     "/workspace/project/../../../private/var/db",
     "/workspace/%2e%2e/%2e%2e/etc/passwd",
     "../../etc/passwd",
+)
+MVAR_TRUSTED_BLOCK_PATHS: tuple[str, ...] = (
+    "/etc/passwd",
+    "/root/.ssh/id_rsa",
+    "/workspace/../../etc/shadow",
 )
 
 BLOCK_REASON_CODES = {
@@ -205,3 +211,29 @@ def test_adapter_filesystem_contract_generated(case: FilesystemCase) -> None:
         assert taint_level in {"trusted", "untrusted"}
     else:
         assert taint_level == "trusted"
+
+
+@pytest.mark.skipif(
+    os.getenv("CLAWZERO_ENGINE_MODE", "").strip().lower() != "mvar",
+    reason="requires explicit mvar-mode parity run",
+)
+@pytest.mark.parametrize(
+    "adapter_name, path",
+    [
+        pytest.param(adapter_name, path, id=f"mvar_block__{adapter_name}__{abs(hash(path)) % 10000:04d}")
+        # MCP adapter maps target to tool name, not path, so filesystem path policy
+        # assertions belong to the direct adapter contract above, not this mvar path test.
+        for adapter_name in ("openclaw", "langchain", "crewai", "autogen")
+        for path in MVAR_TRUSTED_BLOCK_PATHS
+    ],
+)
+def test_mvar_mode_trusted_filesystem_reads_policy_block(adapter_name: str, path: str) -> None:
+    """In mvar mode, trusted filesystem.read adapter calls must hit policy blocking."""
+    if MVARRuntime(profile="dev_balanced").engine != "mvar-security":
+        pytest.skip("mvar runtime package is unavailable in this environment")
+
+    case = FilesystemCase(adapter=adapter_name, path=path, trusted=True)
+    with pytest.raises(ExecutionBlocked) as exc:
+        _execute(case)
+    assert exc.value.decision.sink_type == "filesystem.read"
+    assert exc.value.decision.reason_code in BLOCK_REASON_CODES

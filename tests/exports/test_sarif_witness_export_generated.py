@@ -12,7 +12,9 @@ import json
 import os
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import islice, product
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -27,6 +29,11 @@ sys.path.insert(
 
 from clawzero.sarif import build_sarif_report, validate_sarif_report
 from clawzero.witnesses.verify import verify_witness_object
+
+try:
+    from jsonschema import Draft7Validator
+except Exception:  # pragma: no cover - guarded by test skip
+    Draft7Validator = None  # type: ignore[assignment]
 
 DECISIONS: tuple[str, ...] = ("allow", "annotate", "block")
 SINKS: tuple[str, ...] = (
@@ -47,6 +54,7 @@ REASON_CODES: tuple[str, ...] = (
 ENGINES: tuple[str, ...] = ("embedded-policy-v0.1", "mvar-security")
 SOURCES: tuple[str, ...] = ("user_request", "external_document", "api_response")
 TAINTS: tuple[str, ...] = ("trusted", "untrusted")
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "sarif-schema-2.1.0.json"
 
 
 @dataclass(frozen=True)
@@ -130,6 +138,14 @@ def _with_content_hash(payload: dict[str, Any]) -> dict[str, Any]:
     return witness
 
 
+@lru_cache(maxsize=1)
+def _official_sarif_validator() -> Any:
+    if Draft7Validator is None:
+        pytest.skip("jsonschema is unavailable")
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    return Draft7Validator(schema)
+
+
 @pytest.mark.parametrize("case", [pytest.param(case, id=case.case_id) for case in _sarif_cases()])
 def test_sarif_export_generated(case: SarifCase) -> None:
     witness = {
@@ -146,6 +162,8 @@ def test_sarif_export_generated(case: SarifCase) -> None:
 
     report = build_sarif_report([witness], tool_version="0.3.0")
     assert validate_sarif_report(report) == []
+    errors = sorted(_official_sarif_validator().iter_errors(report), key=lambda item: item.path)
+    assert errors == []
 
     result = report["runs"][0]["results"][0]
     assert result["properties"]["decision"] == case.decision
