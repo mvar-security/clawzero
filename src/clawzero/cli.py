@@ -83,6 +83,11 @@ COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
         "expected": 300,
         "paths": ("tests/exports/test_sarif_witness_export_generated.py",),
     },
+    {
+        "name": "Fuzzing Corpus Extended",
+        "expected": 1008,
+        "paths": ("tests/fuzzing/test_engine_fuzz_extended_generated.py",),
+    },
 )
 
 
