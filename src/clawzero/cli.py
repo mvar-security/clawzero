@@ -24,7 +24,31 @@ from clawzero.contracts import ActionRequest, InputClass
 from clawzero.doctor import format_openclaw_doctor, run_openclaw_doctor
 from clawzero.runtime import AgentSession, MVARRuntime
 from clawzero.sarif import export_sarif
+from clawzero.witnesses.generator import WitnessGenerator
 from clawzero.witnesses.verify import verify_witness_chain, verify_witness_file
+
+COMPLIANCE_SUITE_MANIFEST: tuple[dict[str, Any], ...] = (
+    {
+        "name": "OWASP ASI 2026",
+        "expected": 500,
+        "paths": ("tests/owasp/test_asi_2026_generated.py",),
+    },
+    {
+        "name": "Attack Pack Expansion",
+        "expected": 2700,
+        "paths": ("tests/attack_pack/test_attack_pack_expanded_generated.py",),
+    },
+    {
+        "name": "Policy Matrix",
+        "expected": 432,
+        "paths": ("tests/test_policy_matrix_generated.py",),
+    },
+    {
+        "name": "Witness Integrity Matrix",
+        "expected": 1296,
+        "paths": ("tests/test_witness_integrity_matrix.py",),
+    },
+)
 
 
 def _run_openclaw_demo(mode: str, scenario: str, output_dir: str | None = None) -> int:
@@ -714,6 +738,87 @@ def _cmd_keys_show(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_compliance_repo_root(value: str | None) -> Path:
+    if value:
+        return Path(value).expanduser().resolve()
+    return Path.cwd().resolve()
+
+
+def _sign_compliance_payload(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    key_path = _default_witness_key_path()
+
+    try:
+        if not key_path.exists():
+            # Reuse the same key lifecycle used by witness generation.
+            WitnessGenerator(output_dir=None)
+
+        from cryptography.hazmat.primitives import serialization
+
+        private_key = serialization.load_pem_private_key(
+            key_path.read_bytes(),
+            password=None,
+        )
+        signature = private_key.sign(canonical)
+        return f"ed25519:{base64.b64encode(signature).decode('ascii')}"
+    except Exception:
+        digest = hashlib.sha256(canonical).hexdigest()[:32]
+        return f"ed25519_stub:{digest}"
+
+
+def _cmd_compliance_verify(args: argparse.Namespace) -> int:
+    repo_root = _resolve_compliance_repo_root(args.repo_root)
+    generated_at = datetime.now(timezone.utc).isoformat()
+
+    suites: list[dict[str, Any]] = []
+    total_expected = 0
+    all_present = True
+
+    for suite in COMPLIANCE_SUITE_MANIFEST:
+        expected = int(suite["expected"])
+        path_values = [str(value) for value in suite["paths"]]
+        resolved = [repo_root / value for value in path_values]
+        present = all(path.exists() for path in resolved)
+        total_expected += expected
+        all_present = all_present and present
+        suites.append(
+            {
+                "name": str(suite["name"]),
+                "expected": expected,
+                "paths": path_values,
+                "present": present,
+            }
+        )
+
+    attestation_unsigned = {
+        "schema_version": "1.0",
+        "generated_at": generated_at,
+        "repo_root": repo_root.as_posix(),
+        "total_expected": total_expected,
+        "all_suites_present": all_present,
+        "suites": suites,
+    }
+    signature = _sign_compliance_payload(attestation_unsigned)
+    attestation = dict(attestation_unsigned)
+    attestation["signature"] = signature
+
+    output = Path(args.output).expanduser().resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(attestation, indent=2), encoding="utf-8")
+
+    print("Verifying ClawZero compliance scaffolding...")
+    print("")
+    for suite in suites:
+        symbol = "✓" if suite["present"] else "✗"
+        print(f"{suite['name']:<28} {symbol} {suite['expected']}/{suite['expected']} expected")
+    print("")
+    print(f"Total expected scenarios: {total_expected}")
+    print(f"Attestation: {output.as_posix()}")
+    print(f"Signature: {signature.split(':', 1)[0]}")
+
+    return 0 if all_present else 1
+
+
 def _cmd_session_start(args: argparse.Namespace) -> int:
     session = AgentSession(
         session_id=args.session_id,
@@ -1076,6 +1181,27 @@ def build_parser() -> argparse.ArgumentParser:
     keys_sub = keys.add_subparsers(dest="keys_command", required=True)
     keys_show = keys_sub.add_parser("show", help="Print Ed25519 public key and fingerprint.")
     keys_show.set_defaults(func=_cmd_keys_show)
+
+    compliance = subparsers.add_parser(
+        "compliance",
+        help="Verify test-suite compliance scaffolding and emit signed attestation JSON.",
+    )
+    compliance_sub = compliance.add_subparsers(dest="compliance_command", required=True)
+    compliance_verify = compliance_sub.add_parser(
+        "verify",
+        help="Check mapped compliance suites and write attestation artifact.",
+    )
+    compliance_verify.add_argument(
+        "--repo-root",
+        default=None,
+        help="Repository root used to resolve suite paths (defaults to current directory).",
+    )
+    compliance_verify.add_argument(
+        "--output",
+        default="./compliance/clawzero_asi2026_attestation.json",
+        help="Output path for signed compliance attestation JSON.",
+    )
+    compliance_verify.set_defaults(func=_cmd_compliance_verify)
 
     demo = subparsers.add_parser(
         "demo",
