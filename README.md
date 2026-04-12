@@ -45,7 +45,7 @@ ClawZero enforces policy between model output and tool execution.
 **Execution boundary for OpenClaw agents. Powered by MVAR.**
 
 ```bash
-pip install clawzero==0.2.0
+pip install clawzero==0.2.1
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -65,7 +65,7 @@ ClawZero places a deterministic execution boundary between model output and tool
 ## 30-Second Quickstart
 
 ```bash
-pip install clawzero==0.2.0
+pip install clawzero==0.2.1
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -258,6 +258,18 @@ Run the side-by-side comparison:
 clawzero demo openclaw --mode compare --scenario shell
 clawzero demo openclaw --mode compare --scenario credentials
 clawzero demo openclaw --mode compare --scenario benign
+```
+
+## Session + Wrap (v1)
+
+`wrap` v1 enforces at the process/tool call boundary.
+It does **not** claim syscall-level interception.
+
+```bash
+clawzero wrap -- python my_agent.py
+clawzero session status <session_id>
+clawzero session report <session_id> --format json
+clawzero keys show
 ```
 
 ## Security and Responsible Use

@@ -8,16 +8,21 @@ policy audit, replay, and benchmark reporting.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
+import os
 import runpy
+import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from clawzero.contracts import ActionRequest, InputClass
 from clawzero.doctor import format_openclaw_doctor, run_openclaw_doctor
-from clawzero.runtime import MVARRuntime
+from clawzero.runtime import AgentSession, MVARRuntime
 from clawzero.sarif import export_sarif
 from clawzero.witnesses.verify import verify_witness_chain, verify_witness_file
 
@@ -608,6 +613,288 @@ def _display_path(path: Path) -> str:
         return path.as_posix()
 
 
+def _session_store_dir() -> Path:
+    root = os.getenv("CLAWZERO_STATE_DIR")
+    base = Path(root).expanduser().resolve() if root else (Path.home() / ".clawzero")
+    path = base / "sessions"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _session_meta_path(session_id: str) -> Path:
+    return _session_store_dir() / f"{session_id}.meta.json"
+
+
+def _session_log_path(session_id: str) -> Path:
+    return _session_store_dir() / f"{session_id}.jsonl"
+
+
+def _read_session_meta(session_id: str) -> dict[str, Any]:
+    path = _session_meta_path(session_id)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_session_meta(session_id: str, payload: dict[str, Any]) -> None:
+    path = _session_meta_path(session_id)
+    base = _read_session_meta(session_id)
+    base.update(payload)
+    path.write_text(json.dumps(base, indent=2), encoding="utf-8")
+
+
+def _load_session_records(session_id: str) -> list[dict[str, Any]]:
+    path = _session_log_path(session_id)
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            records.append(obj)
+    return records
+
+
+def _default_witness_key_path() -> Path:
+    explicit = os.getenv("CLAWZERO_WITNESS_KEY_PATH")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    state_root = os.getenv("CLAWZERO_STATE_DIR")
+    base = Path(state_root).expanduser().resolve() if state_root else (Path.home() / ".clawzero")
+    return (base / "keys" / "witness_ed25519_private_key.pem").resolve()
+
+
+def _cmd_keys_show(_args: argparse.Namespace) -> int:
+    key_path = _default_witness_key_path()
+    if not key_path.exists():
+        print("ClawZero Signing Key")
+        print("  Status: missing")
+        print(f"  Key file: {key_path}")
+        print()
+        print("Generate a key by running any command that emits a witness (e.g. `clawzero prove`).")
+        return 1
+
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+        private_key = serialization.load_pem_private_key(
+            key_path.read_bytes(),
+            password=None,
+        )
+        public_bytes = private_key.public_key().public_bytes(
+            encoding=Encoding.Raw,
+            format=PublicFormat.Raw,
+        )
+        public_key_b64 = base64.b64encode(public_bytes).decode("ascii")
+        fingerprint = hashlib.sha256(public_bytes).hexdigest()[:16]
+    except Exception as exc:
+        print("ClawZero Signing Key")
+        print("  Status: unreadable")
+        print(f"  Key file: {key_path}")
+        print(f"  Error: {exc}")
+        return 1
+
+    print("ClawZero Signing Key")
+    print("  Algorithm:   Ed25519")
+    print(f"  Public key:  {public_key_b64}")
+    print(f"  Fingerprint: {fingerprint}")
+    print(f"  Key file:    {key_path}")
+    print()
+    print("Share this fingerprint with auditors to verify witness artifacts.")
+    return 0
+
+
+def _cmd_session_start(args: argparse.Namespace) -> int:
+    session = AgentSession(
+        session_id=args.session_id,
+        profile=args.profile,
+    )
+    _write_session_meta(
+        session.session_id,
+        {
+            "session_id": session.session_id,
+            "profile": session.profile,
+            "started_at": session.started_at.isoformat(),
+            "log_path": session.log_path.as_posix(),
+        },
+    )
+    print(f"Session started: {session.session_id}")
+    print(f"Profile: {session.profile}")
+    print(f"Log: {_display_path(session.log_path)}")
+    return 0
+
+
+def _cmd_session_status(args: argparse.Namespace) -> int:
+    records = _load_session_records(args.session_id)
+    if not records:
+        print(f"No session records found for {args.session_id}", file=sys.stderr)
+        return 1
+
+    blocked = sum(1 for record in records if record.get("decision") == "block")
+    latest = records[-1]
+    chain_total = sum(len(record.get("chain_patterns", [])) for record in records)
+    print(f"Session: {args.session_id}")
+    print(f"Calls: {len(records)}")
+    print(f"Blocked: {blocked}")
+    print(f"Chain detections: {chain_total}")
+    print(f"Escalation score: {latest.get('escalation_score', 0.0)}")
+    print(f"Profile: {latest.get('profile', 'unknown')}")
+    return 0
+
+
+def _cmd_session_report(args: argparse.Namespace) -> int:
+    records = _load_session_records(args.session_id)
+    if not records:
+        print(f"No session records found for {args.session_id}", file=sys.stderr)
+        return 1
+
+    blocked = sum(1 for record in records if record.get("decision") == "block")
+    report = {
+        "session_id": args.session_id,
+        "total_calls": len(records),
+        "blocked_calls": blocked,
+        "escalation_score": records[-1].get("escalation_score", 0.0),
+        "profile": records[-1].get("profile", "unknown"),
+        "chain_patterns": [record.get("chain_patterns", []) for record in records],
+        "records": records,
+    }
+
+    if args.format == "json":
+        payload = json.dumps(report, indent=2)
+        if args.output:
+            output_path = Path(args.output).expanduser().resolve()
+            output_path.write_text(payload, encoding="utf-8")
+            print(f"Session report written: {_display_path(output_path)}")
+            return 0
+        print(payload)
+        return 0
+
+    meta = _read_session_meta(args.session_id)
+    witness_dir_raw = meta.get("witness_dir")
+    if not witness_dir_raw:
+        print("No witness_dir recorded for this session; cannot export SARIF.", file=sys.stderr)
+        return 1
+    if not args.output:
+        print("--output is required for --format sarif", file=sys.stderr)
+        return 1
+    witness_dir = Path(str(witness_dir_raw)).expanduser().resolve()
+    output_file = Path(args.output).expanduser().resolve()
+    try:
+        export_sarif(input_dir=witness_dir, output_file=output_file)
+    except Exception as exc:
+        print(f"SARIF export failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"SARIF report written: {_display_path(output_file)}")
+    return 0
+
+
+def _cmd_wrap(args: argparse.Namespace) -> int:
+    command = list(args.command or [])
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        print("No command provided. Usage: clawzero wrap -- python my_agent.py", file=sys.stderr)
+        return 2
+
+    session = AgentSession(session_id=args.session_id, profile=args.profile)
+    session_meta = {
+        "session_id": session.session_id,
+        "profile": session.profile,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    witness_root = Path(args.output_dir).expanduser().resolve()
+    witness_dir = witness_root / session.session_id
+    witness_dir.mkdir(parents=True, exist_ok=True)
+    runtime = MVARRuntime(profile=args.profile, witness_dir=witness_dir)
+
+    sink_target = command[0]
+    joined = " ".join(command)
+    request = ActionRequest(
+        request_id=str(uuid.uuid4()),
+        framework="wrap",
+        action_type="process_exec",
+        sink_type="shell.exec",
+        tool_name="process_exec",
+        target=sink_target,
+        arguments={"command": joined},
+        input_class=args.input_class,
+        prompt_provenance={
+            "source": "external_document" if args.input_class == "untrusted" else "user_request",
+            "taint_level": args.input_class,
+            "source_chain": ["wrap_command", "process_exec"],
+            "taint_markers": [] if args.input_class != "untrusted" else ["external_content"],
+        },
+        policy_profile=args.profile,
+    )
+
+    decision = runtime.evaluate(request, session=session)
+    timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    status = "BLOCK" if decision.decision == "block" else "ALLOW"
+    print(f"[ClawZero] Session {session.session_id} active — {session.profile}")
+    print("Intercepts at the process/tool call boundary (not syscall-level interception).")
+    print("-" * 56)
+    print(f"{timestamp}  {status:<7} {decision.sink_type:<18} {joined}")
+    if decision.decision == "block":
+        print(f"          Reason: {decision.reason_code}")
+        if runtime.last_witness and runtime.last_witness.get("witness_id"):
+            print(f"          Witness: {runtime.last_witness.get('witness_id')}")
+        report = session.get_session_report()
+        report_path = witness_dir / f"{session.session_id}_report.json"
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        _write_session_meta(
+            session.session_id,
+            {
+                **session_meta,
+                "witness_dir": witness_dir.as_posix(),
+                "report_path": report_path.as_posix(),
+                "command": command,
+            },
+        )
+        print("-" * 56)
+        print("Session complete")
+        print(f"  Calls: {report['total_calls']}")
+        print(f"  Blocked: {report['blocked_calls']}")
+        print(f"  Score: {report['escalation_score']}")
+        print(f"  Report: {_display_path(report_path)}")
+        return 1
+
+    process = subprocess.run(command, check=False)
+    report = session.get_session_report()
+    report["wrapped_exit_code"] = int(process.returncode)
+    report_path = witness_dir / f"{session.session_id}_report.json"
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    _write_session_meta(
+        session.session_id,
+        {
+            **session_meta,
+            "witness_dir": witness_dir.as_posix(),
+            "report_path": report_path.as_posix(),
+            "command": command,
+            "wrapped_exit_code": int(process.returncode),
+        },
+    )
+
+    print("-" * 56)
+    print("Session complete")
+    print(f"  Calls: {report['total_calls']}")
+    print(f"  Blocked: {report['blocked_calls']}")
+    print(f"  Score: {report['escalation_score']}")
+    print(f"  Witnesses: {report['witness_chain_length']}")
+    print(f"  Report: {_display_path(report_path)}")
+    return int(process.returncode)
+
+
 def _cmd_prove(args: argparse.Namespace) -> int:
     report = run_openclaw_doctor()
     runtime_status = report.runtime.status
@@ -732,6 +1019,63 @@ def build_parser() -> argparse.ArgumentParser:
         help="Command payload used by proof simulation.",
     )
     prove.set_defaults(func=_cmd_prove)
+
+    wrap = subparsers.add_parser(
+        "wrap",
+        help="Wrap a command with process/tool-boundary enforcement (not syscall-level interception).",
+    )
+    wrap.add_argument("--profile", default="prod_locked")
+    wrap.add_argument(
+        "--session-id",
+        default=None,
+        help="Optional explicit session ID (defaults to generated ID).",
+    )
+    wrap.add_argument(
+        "--input-class",
+        default=InputClass.UNTRUSTED.value,
+        choices=[item.value for item in InputClass],
+        help="Integrity class for wrapped process input provenance.",
+    )
+    wrap.add_argument(
+        "--output-dir",
+        default="./wrap_witnesses",
+        help="Directory root for wrap witness artifacts and session report.",
+    )
+    wrap.add_argument(
+        "command",
+        nargs=argparse.REMAINDER,
+        help="Command to run. Use `--` before command tokens.",
+    )
+    wrap.set_defaults(func=_cmd_wrap)
+
+    session = subparsers.add_parser(
+        "session",
+        help="Session lifecycle and reporting commands.",
+    )
+    session_sub = session.add_subparsers(dest="session_command", required=True)
+
+    session_start = session_sub.add_parser("start", help="Start a new local session record.")
+    session_start.add_argument("--profile", default="dev_balanced")
+    session_start.add_argument("--session-id", default=None)
+    session_start.set_defaults(func=_cmd_session_start)
+
+    session_status = session_sub.add_parser("status", help="Show session status from local JSONL log.")
+    session_status.add_argument("session_id")
+    session_status.set_defaults(func=_cmd_session_status)
+
+    session_report = session_sub.add_parser("report", help="Export session report in JSON or SARIF.")
+    session_report.add_argument("session_id")
+    session_report.add_argument("--format", choices=["json", "sarif"], default="json")
+    session_report.add_argument("--output", default=None)
+    session_report.set_defaults(func=_cmd_session_report)
+
+    keys = subparsers.add_parser(
+        "keys",
+        help="Inspect local witness signing key material.",
+    )
+    keys_sub = keys.add_subparsers(dest="keys_command", required=True)
+    keys_show = keys_sub.add_parser("show", help="Print Ed25519 public key and fingerprint.")
+    keys_show.set_defaults(func=_cmd_keys_show)
 
     demo = subparsers.add_parser(
         "demo",

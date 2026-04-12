@@ -32,7 +32,7 @@ from clawzero.exceptions import (
 from clawzero.protect import protect
 from clawzero.protect_agent import protect_agent
 from clawzero.benchmark import run_benchmark
-from clawzero.runtime import MVARRuntime
+from clawzero.runtime import AgentSession, MVARRuntime
 from clawzero.doctor import run_openclaw_doctor, format_openclaw_doctor
 from clawzero.sarif import export_sarif
 from clawzero.witness import (
@@ -52,6 +52,7 @@ __all__ = [
     "protect_agent",
     "run_benchmark",
     "MVARRuntime",
+    "AgentSession",
     "OpenClawAdapter",
     "LangChainAdapter",
     "protect_langchain_tool",

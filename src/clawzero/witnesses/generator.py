@@ -323,7 +323,9 @@ class WitnessGenerator:
         explicit = os.getenv("CLAWZERO_WITNESS_KEY_PATH")
         if explicit:
             return Path(explicit).expanduser().resolve()
-        return (Path.home() / ".clawzero" / "keys" / "witness_ed25519_private_key.pem").resolve()
+        state_root = os.getenv("CLAWZERO_STATE_DIR")
+        base = Path(state_root).expanduser().resolve() if state_root else (Path.home() / ".clawzero")
+        return (base / "keys" / "witness_ed25519_private_key.pem").resolve()
 
     def _resolve_chain_state(self) -> tuple[int, str]:
         if self.output_dir is None:

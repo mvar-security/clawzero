@@ -13,7 +13,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from clawzero.contracts import ActionDecision, ActionRequest, InputClass
@@ -21,6 +21,9 @@ from clawzero.exceptions import ClawZeroConfigError
 from clawzero.witness import generate_witness, set_witness_output_dir
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from clawzero.runtime.session import AgentSession
 
 
 class MVARRuntime:
@@ -248,7 +251,11 @@ class MVARRuntime:
             "credentials.access": "block",
         }
 
-    def evaluate(self, request: ActionRequest) -> ActionDecision:
+    def evaluate(
+        self,
+        request: ActionRequest,
+        session: Optional["AgentSession"] = None,
+    ) -> ActionDecision:
         """Evaluate request through active engine and emit witness."""
         prepared_request = self._prepare_request(request)
 
@@ -280,8 +287,15 @@ class MVARRuntime:
         decision.annotations["cec_status"] = cec_status
         decision.annotations["network_mode"] = self.network_mode
         decision.annotations["network_allowlist"] = sorted(self.network_allowlist)
+        if not isinstance(decision.annotations.get("provenance"), dict):
+            decision.annotations["provenance"] = dict(prepared_request.prompt_provenance)
+
+        if session is not None:
+            decision = session.evaluate(decision)
 
         self.last_witness = generate_witness(prepared_request, decision)
+        if session is not None:
+            session.attach_witness(self.last_witness)
         return decision
 
     def _prepare_request(self, request: ActionRequest) -> ActionRequest:
