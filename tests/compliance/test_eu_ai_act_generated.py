@@ -35,6 +35,14 @@ class EUAIControl:
     tool_name: str
 
 
+@dataclass(frozen=True)
+class EUAIControlMappingContract:
+    article: str
+    modeled_sink_type: str
+    modeled_reason_code: str
+    scope_note: str
+
+
 EUAI_CONTROLS: tuple[EUAIControl, ...] = (
     EUAIControl("Article 9", "Risk Management", "shell.exec", "bash_execute"),
     EUAIControl("Article 10", "Data Governance", "filesystem.read", "read_file"),
@@ -44,6 +52,57 @@ EUAI_CONTROLS: tuple[EUAIControl, ...] = (
     EUAIControl("Article 15", "Robustness & Cybersecurity", "credentials.access", "get_secret"),
     EUAIControl("Article 16", "Post-market Monitoring", "shell.exec", "runtime_task"),
     EUAIControl("Article 17", "Quality Management", "http.request", "network_call"),
+)
+
+EUAI_CONTROL_MAPPING_CONTRACTS: tuple[EUAIControlMappingContract, ...] = (
+    EUAIControlMappingContract(
+        "Article 9",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Risk management is modeled as blocking untrusted execution at critical shell sink.",
+    ),
+    EUAIControlMappingContract(
+        "Article 10",
+        "filesystem.read",
+        "PATH_BLOCKED",
+        "Data governance is modeled as blocking sensitive filesystem reads outside allowlist paths.",
+    ),
+    EUAIControlMappingContract(
+        "Article 12",
+        "http.request",
+        "DOMAIN_BLOCKED",
+        "Logging/traceability is modeled as blocking outbound trace exfiltration to unapproved domains.",
+    ),
+    EUAIControlMappingContract(
+        "Article 13",
+        "tool.custom",
+        "STEP_UP_REQUIRED",
+        "Transparency is modeled as requiring workflow step-up in non-prod-locked profiles.",
+    ),
+    EUAIControlMappingContract(
+        "Article 14",
+        "tool.custom",
+        "STEP_UP_REQUIRED",
+        "Human oversight is modeled as runtime approval gating via custom tool workflow.",
+    ),
+    EUAIControlMappingContract(
+        "Article 15",
+        "credentials.access",
+        "CREDENTIAL_ACCESS_BLOCKED",
+        "Robustness/cybersecurity is modeled as hard credential sink boundary enforcement.",
+    ),
+    EUAIControlMappingContract(
+        "Article 16",
+        "shell.exec",
+        "UNTRUSTED_TO_CRITICAL_SINK",
+        "Provider post-market obligations are modeled as runtime blocking of unsafe execution tasks.",
+    ),
+    EUAIControlMappingContract(
+        "Article 17",
+        "http.request",
+        "DOMAIN_BLOCKED",
+        "Quality management is modeled as network egress policy control for quality workflow calls.",
+    ),
 )
 
 
@@ -70,6 +129,20 @@ class EUAICase:
         if self.profile == "dev_balanced":
             return "dev_strict"
         return self.profile
+
+
+def _expected_witness_taint_level(taint_level: str) -> str:
+    # Engine contract: unknown and untrusted inputs normalize to untrusted.
+    if taint_level in {"unknown", "untrusted"}:
+        return "untrusted"
+    return taint_level
+
+
+def _mapping_contract_for(article: str) -> EUAIControlMappingContract:
+    for contract in EUAI_CONTROL_MAPPING_CONTRACTS:
+        if contract.article == article:
+            return contract
+    raise KeyError(f"Missing EU AI Act mapping contract for {article}")
 
 
 def _target_for(case: EUAICase) -> str:
@@ -152,6 +225,7 @@ def test_eu_ai_act_control_mapping_generated(case: EUAICase) -> None:
     expected_decision, expected_reason = _expected_for(case)
     target = _target_for(case)
     article_slug = case.control.article.lower().replace(" ", "_")
+    contract = _mapping_contract_for(case.control.article)
 
     request = ActionRequest(
         request_id=str(uuid.uuid4()),
@@ -181,7 +255,68 @@ def test_eu_ai_act_control_mapping_generated(case: EUAICase) -> None:
 
     decision = runtime.evaluate(request)
     assert decision.decision == expected_decision
+    assert decision.sink_type == case.control.sink_type
+    assert decision.target == target
     assert decision.reason_code == expected_reason
+    if expected_reason == "STEP_UP_REQUIRED":
+        assert contract.modeled_reason_code == "STEP_UP_REQUIRED"
+    elif expected_reason == "POLICY_ALLOW":
+        assert case.control.sink_type == "tool.custom"
+        assert case.expected_profile == "prod_locked"
+        assert contract.modeled_reason_code == "STEP_UP_REQUIRED"
+    else:
+        assert decision.reason_code == contract.modeled_reason_code
     assert decision.annotations.get("effective_policy_profile") == case.expected_profile
-    assert runtime.last_witness is not None
+    witness = runtime.last_witness
+    assert isinstance(witness, dict)
+    assert witness.get("request_id") == decision.request_id
+    assert witness.get("decision") == expected_decision
+    assert witness.get("reason_code") == expected_reason
+    assert witness.get("sink_type") == case.control.sink_type
+    assert witness.get("target") == target
 
+    provenance = witness.get("provenance")
+    assert isinstance(provenance, dict)
+    assert provenance.get("source") == f"eu_ai_act_{article_slug}"
+    assert provenance.get("taint_level") == _expected_witness_taint_level(case.taint_level)
+    markers = provenance.get("taint_markers")
+    assert isinstance(markers, list)
+    assert "eu_ai_act" in markers
+    assert article_slug in markers
+    assert f"scenario_{case.scenario_index:02d}" in markers
+
+
+def test_eu_ai_act_mapping_contract_explicit_and_complete() -> None:
+    """EU AI Act article-to-engine mapping assumptions are explicit and complete."""
+    control_articles = {control.article for control in EUAI_CONTROLS}
+    contract_articles = {contract.article for contract in EUAI_CONTROL_MAPPING_CONTRACTS}
+    assert contract_articles == control_articles
+
+    for control in EUAI_CONTROLS:
+        contract = _mapping_contract_for(control.article)
+        sample_case = EUAICase(
+            control=control,
+            scenario_index=1,
+            profile="dev_strict",
+            taint_level="untrusted",
+            input_class="untrusted",
+        )
+        _, expected_reason = _expected_for(sample_case)
+        assert control.sink_type == contract.modeled_sink_type
+        if control.sink_type == "tool.custom":
+            # tool.custom reason depends on effective profile; prod_locked can allow.
+            assert contract.modeled_reason_code == "STEP_UP_REQUIRED"
+            assert expected_reason == "STEP_UP_REQUIRED"
+        else:
+            assert expected_reason == contract.modeled_reason_code
+        assert contract.scope_note.strip()
+
+
+def test_eu_ai_act_gap_aug_2026_unmodeled_obligations_are_explicit() -> None:
+    pytest.skip(
+        "Gap (explicit): this generated suite models runtime sink enforcement only. "
+        "It does not yet cover technical documentation evidence workflows (Article 11), "
+        "conformity assessment and CE marking workflows (Articles 43-49), "
+        "or post-market monitoring/serious-incident reporting process obligations "
+        "that are not reducible to single runtime sink decisions."
+    )
