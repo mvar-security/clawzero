@@ -8,6 +8,7 @@ This suite adds 50 scenarios to prove session state isolation:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import uuid
@@ -38,6 +39,7 @@ SINKS: tuple[str, ...] = (
     "shell.exec",
 )
 TAINTS: tuple[str, ...] = ("trusted", "untrusted")
+_DEFAULT_TRUST = object()
 
 
 @dataclass(frozen=True)
@@ -87,8 +89,20 @@ def _decision(
     taint_level: str,
     source: str,
     profile: str,
+    trust_level: str | None | object = _DEFAULT_TRUST,
+    session_blob: dict[str, object] | None = None,
 ) -> ActionDecision:
     reason = "POLICY_ALLOW" if decision == "allow" else "UNTRUSTED_TO_CRITICAL_SINK"
+    annotations: dict[str, object] = {
+        "provenance": {
+            "source": source,
+            "taint_level": taint_level,
+        },
+        "input_class": taint_level,
+    }
+    if session_blob is not None:
+        annotations["session"] = session_blob
+
     return ActionDecision(
         request_id=request_id,
         decision=decision,
@@ -97,14 +111,8 @@ def _decision(
         sink_type=sink_type,
         target=f"target:{sink_type}",
         policy_profile=profile,
-        annotations={
-            "provenance": {
-                "source": source,
-                "taint_level": taint_level,
-            },
-            "input_class": taint_level,
-        },
-        trust_level=taint_level,
+        annotations=annotations,
+        trust_level=taint_level if trust_level is _DEFAULT_TRUST else trust_level,
     )
 
 
@@ -141,8 +149,11 @@ def test_cross_session_isolation_generated(case: IsolationCase, tmp_path: Path) 
             profile=case.profile_a,
         )
     )
-    assert enriched_a.annotations["session"]["session_id"] == session_a.session_id
-    assert enriched_a.annotations["session"]["source_id"] == source_a
+    session_meta_a = enriched_a.annotations["session"]
+    assert session_meta_a["session_id"] == session_a.session_id
+    assert session_meta_a["source_id"] == source_a
+    assert session_meta_a["call_index"] == 1
+    assert session_meta_a["profile"] == session_a.profile
 
     if case.close_a_before_b:
         session_a.close()
@@ -171,6 +182,7 @@ def test_cross_session_isolation_generated(case: IsolationCase, tmp_path: Path) 
     assert session_meta_b["source_id"] == source_b
     assert session_meta_b["chain_detections"] == []
     assert session_b.chain_detector.summary()["events"] == 1
+    assert session_meta_b["profile"] == session_b.profile
 
     # JSONL logs stay isolated per session and never mix request ids.
     a_lines = session_a.log_path.read_text(encoding="utf-8").splitlines()
@@ -179,3 +191,57 @@ def test_cross_session_isolation_generated(case: IsolationCase, tmp_path: Path) 
     assert all(req_b not in line for line in a_lines)
     assert any(req_b in line for line in b_lines)
     assert all(req_a not in line for line in b_lines)
+
+    # Log payload session metadata remains isolated and append-only.
+    a_payload = json.loads(a_lines[-1])
+    b_payload = json.loads(b_lines[-1])
+    assert a_payload["source_id"] == source_a
+    assert b_payload["source_id"] == source_b
+    assert a_payload["profile"] != ""
+    assert b_payload["profile"] != ""
+
+
+def test_cross_session_isolation_contamination_attempt_is_fail_closed(tmp_path: Path) -> None:
+    root = tmp_path / "contamination"
+    session_a = AgentSession(session_id="A_contam", profile="dev_balanced", persistence_root=root)
+    session_b = AgentSession(session_id="B_contam", profile="dev_balanced", persistence_root=root)
+
+    # Seed session A with untrusted history to ensure realistic attack context.
+    session_a.evaluate(
+        _decision(
+            request_id=f"req-A-{uuid.uuid4().hex[:8]}",
+            sink_type="shell.exec",
+            decision="block",
+            taint_level="untrusted",
+            source="source_A",
+            profile="dev_balanced",
+        )
+    )
+
+    # Simulate cross-session contamination by injecting forged session metadata from A.
+    contaminated = _decision(
+        request_id=f"req-B-{uuid.uuid4().hex[:8]}",
+        sink_type="tool.custom",
+        decision="allow",
+        taint_level="trusted",
+        source="source_B",
+        profile="dev_balanced",
+        trust_level=None,
+        session_blob={"session_id": session_a.session_id, "taint_level": "untrusted"},
+    )
+    enriched_b = session_b.evaluate(contaminated)
+    meta_b = enriched_b.annotations["session"]
+
+    # Enforcement response must be fail-closed on taint and session ownership.
+    assert meta_b["session_id"] == session_b.session_id
+    assert meta_b["taint_level"] == "untrusted"
+    assert session_b.escalation_score > 0.0
+    assert session_b.chain_detector.summary()["events"] == 1
+    assert session_b.log_path != session_a.log_path
+
+
+def test_cross_session_isolation_gap_dedicated_breach_reason_code_not_implemented() -> None:
+    pytest.skip(
+        "Gap (explicit): session isolation currently fail-closes via taint/escalation, "
+        "but does not emit a dedicated ISOLATION_BREACH reason code or alert channel."
+    )
