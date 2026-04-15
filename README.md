@@ -62,6 +62,28 @@ ClawZero places a deterministic execution boundary between model output and tool
 
 ![ClawZero vs Standard OpenClaw](docs/assets/comparison.png)
 
+## The mvar-security Stack
+
+ClawZero is part of a three-layer AI security infrastructure:
+
+| Layer | Tool | What it secures |
+|-------|------|-----------------|
+| **Runtime** | [MVAR](https://github.com/mvar-security/mvar) | How information flows through the agent |
+| **Execution** | **ClawZero** (this repo) | What the agent does |
+| **Memory** | [ClawSeal](https://github.com/mvar-security/ClawSeal) | What the agent remembers |
+
+**ClawZero enforces execution boundaries using MVAR's information flow control.**
+
+For cryptographically verified persistent memory, add ClawSeal:
+```bash
+pip install clawseal
+```
+
+For direct MVAR runtime integration (without OpenClaw-specific tooling):
+```bash
+pip install mvar-security
+```
+
 ## 30-Second Quickstart
 
 ```bash
