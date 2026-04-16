@@ -45,7 +45,7 @@ ClawZero enforces policy between model output and tool execution.
 **Execution boundary for OpenClaw agents. Powered by MVAR.**
 
 ```bash
-pip install clawzero==0.2.1
+pip install clawzero==0.4.0
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -87,7 +87,7 @@ pip install mvar-security
 ## 30-Second Quickstart
 
 ```bash
-pip install clawzero==0.2.1
+pip install clawzero==0.4.0
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
