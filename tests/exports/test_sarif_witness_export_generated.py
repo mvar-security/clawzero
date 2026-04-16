@@ -27,6 +27,7 @@ sys.path.insert(
     ),
 )
 
+from clawzero import __version__
 from clawzero.sarif import build_sarif_report, validate_sarif_report
 from clawzero.witnesses.verify import verify_witness_object
 
@@ -160,7 +161,7 @@ def test_sarif_export_generated(case: SarifCase) -> None:
         "_source_file": f"witness_{case.index:03d}.json",
     }
 
-    report = build_sarif_report([witness], tool_version="0.3.0")
+    report = build_sarif_report([witness], tool_version=__version__)
     assert validate_sarif_report(report) == []
     errors = sorted(_official_sarif_validator().iter_errors(report), key=lambda item: item.path)
     assert errors == []

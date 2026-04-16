@@ -21,6 +21,7 @@ sys.path.insert(
     ),
 )
 
+from clawzero import __version__
 from clawzero.sarif import build_sarif_report
 
 try:
@@ -70,7 +71,7 @@ def test_sarif_report_validates_against_official_schema(
     sink: str,
 ) -> None:
     validator = _validator()
-    report = build_sarif_report([_single_witness(decision, reason, sink, 1)], tool_version="0.3.0")
+    report = build_sarif_report([_single_witness(decision, reason, sink, 1)], tool_version=__version__)
     errors = sorted(validator.iter_errors(report), key=lambda item: item.path)
     assert errors == []
 
