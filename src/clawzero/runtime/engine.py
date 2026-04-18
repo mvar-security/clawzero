@@ -1178,12 +1178,14 @@ class MVARRuntime:
             witness_signature = str(getattr(result, "witness_signature", "") or "")
             trust_level = str(provenance.get("taint_level", "")).lower() or self._derive_trust_level(request)
             enforcement_action = getattr(result, "enforcement_action", None)
+            continuity_metadata = getattr(result, "continuity_metadata", None)  # P1 continuity attestation
             annotations = {
                 "witness_signature": witness_signature,
                 "provenance": provenance,
                 "evaluation_trace": [str(item) for item in trace],
                 "enforcement_action": enforcement_action,
                 "taint_markers": self._extract_taint_markers(request),
+                "continuity_metadata": continuity_metadata,  # P1 continuity attestation
             }
             decision = ActionDecision(
                 request_id=request.request_id,
@@ -1232,6 +1234,7 @@ class MVARRuntime:
                     "evaluation_trace": result.get("evaluation_trace", []),
                     "enforcement_action": result.get("enforcement_action"),
                     "taint_markers": self._extract_taint_markers(request),
+                    "continuity_metadata": result.get("continuity_metadata"),  # P1 continuity attestation
                 },
             )
             return self._apply_mvar_compatibility_overrides(request, decision)

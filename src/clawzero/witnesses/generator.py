@@ -102,6 +102,19 @@ class WitnessGenerator:
             },
             "annotations": decision.annotations,
         }
+
+        # P1 Continuity Metadata Attestation
+        # Emit top-level continuity section from governor's continuity_metadata
+        continuity_metadata = decision.annotations.get("continuity_metadata")
+        if continuity_metadata and isinstance(continuity_metadata, dict):
+            witness["continuity"] = {
+                "continuity_hash": continuity_metadata.get("continuity_hash"),
+                "protocol_version": continuity_metadata.get("protocol_version"),
+                "constitutional_classification": continuity_metadata.get("constitutional_classification"),
+                "ccl_source": continuity_metadata.get("ccl_source"),
+                "violation_count": continuity_metadata.get("violation_count", 0),
+            }
+
         witness["content_hash"] = self._content_hash(witness)
 
         decision.witness_id = witness_id
