@@ -355,13 +355,15 @@ The attack demonstrations show how enforcement works; they are not tools for per
 Command families map to enforcement jobs:
 
 - `clawzero prove` - run install-to-proof validation in one command
+- `clawzero wrap` - enforce process/tool-boundary execution for wrapped commands
+- `clawzero session` - manage local session lifecycle and reporting
+- `clawzero keys show` - print witness signer public key + fingerprint
+- `clawzero compliance verify` - validate mapped suites and emit signed attestation
 - `clawzero demo` - run side-by-side enforcement proof demos
 - `clawzero witness` - inspect and validate witness artifacts
 - `clawzero audit` - evaluate deterministic decisions for sink requests
 - `clawzero attack` - replay known attack scenarios as enforcement proofs
 - `clawzero report` - export witness artifacts to SARIF for code scanning
-
-Note: `clawzero prove` is available on the main branch and will be included in the next PyPI release.
 
 ## Zero-Config API
 
