@@ -202,12 +202,17 @@ def test_witness_export_generated(case: WitnessCase) -> None:
     }
     witness = _with_content_hash(base)
 
-    valid = verify_witness_object(witness, require_chain=True)
+    # This test validates SARIF export STRUCTURE + content-hash integrity, not the
+    # cryptographic signer (fixtures carry a non-crypto ed25519_stub marker). Use
+    # require_signature=False so structural validity is checked without the real
+    # signature verification that (correctly) rejects stub markers. The tamper case
+    # below still proves content-hash integrity is enforced.
+    valid = verify_witness_object(witness, require_chain=True, require_signature=False)
     assert valid.valid is True
     assert valid.reasons == []
 
     tampered = dict(witness)
     tampered["reason_code"] = "TAMPERED_REASON"
-    invalid = verify_witness_object(tampered, require_chain=True)
+    invalid = verify_witness_object(tampered, require_chain=True, require_signature=False)
     assert invalid.valid is False
     assert any("content_hash mismatch" in reason for reason in invalid.reasons)

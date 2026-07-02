@@ -26,6 +26,7 @@ class WitnessGenerator:
         self._last_content_hash: Optional[str] = None
         self._last_chain_index = 0
         self._ed25519_private_key: Any | None = None
+        self._ed25519_public_key_hex: str | None = None
         self._signing_mode = "ed25519_stub"
         self._initialize_signer()
 
@@ -77,6 +78,19 @@ class WitnessGenerator:
             "taint_age_hours": temporal_taint_status.get("taint_age_hours", 0.0),
             "budget_status": budget_status,
             "witness_signature": self._sign(witness_id, request, decision),
+            # Public key that verifies witness_signature (Ed25519, raw hex). Present
+            # only for genuinely Ed25519-signed witnesses so verifiers can perform a
+            # real signature check rather than a format-only check. Absent for stubs
+            # and for signatures inherited from the upstream MVAR engine.
+            "witness_public_key": self._embedded_public_key(decision),
+            # Upstream MVAR seal preserved as an attested cross-engine reference (over
+            # MVAR's own payload; verifiable independently with mvar_witness_public_key).
+            "mvar_witness_signature": (
+                decision.annotations.get("mvar_witness_signature") or None
+            ),
+            "mvar_witness_public_key": (
+                decision.annotations.get("mvar_witness_public_key") or None
+            ),
             "engine": decision.engine,
             "adapter": adapter_metadata,
             "witness_id": witness_id,
@@ -264,14 +278,12 @@ class WitnessGenerator:
     def _sign(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision
     ) -> str:
-        existing_signature = decision.annotations.get("witness_signature")
-        if isinstance(existing_signature, str) and existing_signature:
-            return existing_signature
-
-        mvar_signature = decision.annotations.get("mvar_result", {}).get("witness_signature")
-        if isinstance(mvar_signature, str) and mvar_signature:
-            return mvar_signature
-
+        # ClawZero always signs the witness with its OWN key over a payload that is
+        # fully recoverable from the witness, so `clawzero witness verify` can perform
+        # a real end-to-end signature check. The upstream MVAR seal is preserved
+        # separately (mvar_witness_signature / mvar_witness_public_key) as an attested
+        # cross-engine reference — it is NOT reused as the witness_signature, because it
+        # signs MVAR's payload, not the witness fields, and would be unverifiable here.
         if self._signing_mode == "ed25519" and self._ed25519_private_key is not None:
             payload = self._signature_payload(witness_id, request, decision)
             signature = self._ed25519_private_key.sign(payload)
@@ -284,6 +296,16 @@ class WitnessGenerator:
         )
         signature_hash = hashlib.sha256(fallback_payload.encode("utf-8")).hexdigest()[:16]
         return f"ed25519_stub:{signature_hash}"
+
+    def _embedded_public_key(self, decision: ActionDecision) -> str | None:
+        """Return the raw Ed25519 public key hex that verifies witness_signature.
+
+        ClawZero always signs with its own key (see _sign), so whenever we are in
+        ed25519 mode we embed our own public key. Stub mode has no distributable key.
+        """
+        if self._signing_mode == "ed25519" and self._ed25519_public_key_hex:
+            return self._ed25519_public_key_hex
+        return None
 
     def _signature_payload(
         self, witness_id: str, request: ActionRequest, decision: ActionDecision
@@ -327,10 +349,17 @@ class WitnessGenerator:
                 except OSError:
                     pass
                 self._ed25519_private_key = private_key
+            # Cache raw public key hex so verifiers can perform a real Ed25519 check.
+            pub = self._ed25519_private_key.public_key()
+            self._ed25519_public_key_hex = pub.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            ).hex()
             self._signing_mode = "ed25519"
         except Exception:
             self._signing_mode = "ed25519_stub"
             self._ed25519_private_key = None
+            self._ed25519_public_key_hex = None
 
     def _resolve_key_path(self) -> Path:
         explicit = os.getenv("CLAWZERO_WITNESS_KEY_PATH")

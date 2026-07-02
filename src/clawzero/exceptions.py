@@ -26,6 +26,16 @@ class ClawZeroConfigError(ClawZeroError):
     """Raised when ClawZero configuration is invalid or missing."""
 
 
+class MVARUnavailableError(ClawZeroError):
+    """Raised when the MVAR enforcement engine cannot be loaded and require_mvar is set.
+
+    ClawZero fails CLOSED by default: rather than silently degrading to the weaker
+    embedded policy engine (which does not enforce the full IFC taint invariant),
+    the runtime refuses to start. Callers who genuinely want the embedded engine
+    must opt in explicitly (require_mvar=False or CLAWZERO_ALLOW_EMBEDDED=1).
+    """
+
+
 class ClawZeroRuntimeError(ClawZeroError):
     """Raised when ClawZero encounters an unexpected runtime error."""
 

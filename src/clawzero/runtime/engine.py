@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from clawzero.contracts import ActionDecision, ActionRequest, InputClass
-from clawzero.exceptions import ClawZeroConfigError
+from clawzero.exceptions import ClawZeroConfigError, MVARUnavailableError
 from clawzero.witness import generate_witness, set_witness_output_dir
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,18 @@ class MVARRuntime:
         budget_window_seconds: int = 3600,
         budget_charging_policy: str = "SUCCESS_BASED",
         budget_default_cost_usd: float = 0.0,
+        require_mvar: bool = True,
     ):
+        # Fail-closed by default: if the MVAR enforcement engine cannot be loaded,
+        # ClawZero refuses to run rather than silently degrading to the weaker
+        # embedded policy engine. Opt out only via require_mvar=False or the
+        # CLAWZERO_ALLOW_EMBEDDED=1 escape hatch (both are explicit, logged choices).
+        env_allow_embedded = os.getenv("CLAWZERO_ALLOW_EMBEDDED", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        self.require_mvar = require_mvar and not env_allow_embedded
         self.profile = profile
         self.witness_dir = witness_dir
         self.cec_enforce = cec_enforce
@@ -105,10 +116,20 @@ class MVARRuntime:
             self._witness_signer = "ed25519_qseal"
             logger.info("MVAR runtime loaded (mvar-security %s)", self._mvar_version)
         else:
+            if self.require_mvar:
+                raise MVARUnavailableError(
+                    "ClawZero requires the MVAR enforcement engine (mvar-security) but it "
+                    "could not be loaded. ClawZero fails closed rather than degrade to the "
+                    "weaker embedded policy engine, which does not enforce the full IFC taint "
+                    "invariant. Install mvar-security, or explicitly opt into the embedded "
+                    "engine with require_mvar=False (or CLAWZERO_ALLOW_EMBEDDED=1) if you "
+                    "understand the reduced guarantees."
+                )
             self.engine = "embedded-policy-v0.1"
             self.policy_id = "mvar-embedded.v0.1"
             logger.warning(
-                "MVAR runtime unavailable — using embedded policy engine v0.1"
+                "MVAR runtime unavailable — EMBEDDED policy engine v0.1 in use by explicit "
+                "opt-in. Reduced enforcement: the full IFC taint invariant is NOT applied."
             )
 
         self._load_embedded_policy(profile)
@@ -1118,6 +1139,11 @@ class MVARRuntime:
         """
         governor = self._mvar_governor
         if governor is None:
+            if self.require_mvar:
+                raise MVARUnavailableError(
+                    "MVAR governor became unavailable at evaluation time while require_mvar "
+                    "is set. Failing closed instead of degrading to the embedded engine."
+                )
             return self._evaluate_embedded(request)
 
         payload = {
@@ -1152,6 +1178,11 @@ class MVARRuntime:
             if normalized is not None:
                 return normalized
 
+        if self.require_mvar:
+            raise MVARUnavailableError(
+                "MVAR governor produced no normalizable decision while require_mvar is set. "
+                "Failing closed instead of degrading to the embedded engine."
+            )
         fallback = self._evaluate_embedded(request)
         fallback.engine = "embedded-policy-v0.1"
         fallback.policy_id = "mvar-embedded.v0.1"
@@ -1176,11 +1207,17 @@ class MVARRuntime:
             if not isinstance(trace, list):
                 trace = []
             witness_signature = str(getattr(result, "witness_signature", "") or "")
+            mvar_public_key = getattr(result, "witness_public_key", None)
             trust_level = str(provenance.get("taint_level", "")).lower() or self._derive_trust_level(request)
             enforcement_action = getattr(result, "enforcement_action", None)
             continuity_metadata = getattr(result, "continuity_metadata", None)  # P1 continuity attestation
             annotations = {
-                "witness_signature": witness_signature,
+                # MVAR's own upstream seal over MVAR's payload, recorded as an attested
+                # cross-engine reference (verifiable with mvar_witness_public_key). ClawZero
+                # re-signs the witness with its own key over its own recoverable payload so
+                # `clawzero witness verify` can perform a real end-to-end signature check.
+                "mvar_witness_signature": witness_signature,
+                "mvar_witness_public_key": mvar_public_key,
                 "provenance": provenance,
                 "evaluation_trace": [str(item) for item in trace],
                 "enforcement_action": enforcement_action,
@@ -1229,7 +1266,8 @@ class MVARRuntime:
                 trust_level=self._derive_trust_level(request),
                 annotations={
                     "mvar_result": result,
-                    "witness_signature": str(result.get("witness_signature", "")),
+                    "mvar_witness_signature": str(result.get("witness_signature", "")),
+                    "mvar_witness_public_key": result.get("witness_public_key"),
                     "provenance": result.get("provenance", {}),
                     "evaluation_trace": result.get("evaluation_trace", []),
                     "enforcement_action": result.get("enforcement_action"),
