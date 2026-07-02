@@ -1,8 +1,10 @@
 # ClawZero Implementation Roadmap
 
-**Status:** Foundation phase (pre-implementation)
-**Target:** Q2 2026 alpha release
-**Goal:** Production-ready execution firewall for OpenClaw agents
+**Status:** Shipping — v0.4.0 released (May 2026); 14 CLI commands, 5 framework adapters,
+~9,600 tests. (This doc's original "pre-implementation" framing predated the 0.x releases
+and is retained below only for historical roadmap context.)
+**Current release:** v0.4.0 (PyPI: clawzero)
+**Goal:** Production-ready execution firewall for OpenClaw agents, powered by MVAR
 
 ---
 

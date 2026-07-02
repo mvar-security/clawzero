@@ -57,12 +57,16 @@ def test_compliance_verify_writes_signed_attestation(
     out = capsys.readouterr().out
 
     assert rc == 0
-    assert "Total expected scenarios: 5" in out
+    # Honest wording (G-18): presence check, NOT execution. Output must make that explicit.
+    assert "MANIFEST CHECK" in out
+    assert "Declared scenario count (NOT executed): 5" in out
     assert output.exists()
 
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["all_suites_present"] is True
-    assert payload["total_expected"] == 5
+    assert payload["declared_scenario_count"] == 5
+    assert payload["check_type"] == "manifest_presence_only"
+    assert payload["executed"] is False
     assert str(payload["signature"]).startswith("ed25519")
 
 

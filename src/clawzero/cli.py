@@ -852,10 +852,17 @@ def _cmd_compliance_verify(args: argparse.Namespace) -> int:
         )
 
     attestation_unsigned = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
+        # HONEST semantics (Phase 4B / finding G-18): this command checks that suite FILES
+        # are PRESENT and sums their declared expected counts. It does NOT execute the
+        # scenarios. `check_type` and field names make that explicit so the attestation is
+        # never mistaken for an execution/pass result. Use `clawzero compliance run` to
+        # actually execute the suites and record real pass/fail.
+        "check_type": "manifest_presence_only",
+        "executed": False,
         "generated_at": generated_at,
         "repo_root": repo_root.as_posix(),
-        "total_expected": total_expected,
+        "declared_scenario_count": total_expected,
         "all_suites_present": all_present,
         "suites": suites,
     }
@@ -867,17 +874,69 @@ def _cmd_compliance_verify(args: argparse.Namespace) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(attestation, indent=2), encoding="utf-8")
 
-    print("Verifying ClawZero compliance scaffolding...")
+    print("ClawZero compliance MANIFEST CHECK (presence only — does NOT run scenarios)")
+    print("Run `clawzero compliance run` to execute the suites and record pass/fail.")
     print("")
     for suite in suites:
         symbol = "✓" if suite["present"] else "✗"
-        print(f"{suite['name']:<28} {symbol} {suite['expected']}/{suite['expected']} expected")
+        print(f"{suite['name']:<28} {symbol} present  ({suite['expected']} declared scenarios)")
     print("")
-    print(f"Total expected scenarios: {total_expected}")
-    print(f"Attestation: {output.as_posix()}")
+    print(f"Declared scenario count (NOT executed): {total_expected}")
+    print(f"All suite files present: {all_present}")
+    print(f"Attestation (check_type=manifest_presence_only): {output.as_posix()}")
     print(f"Signature: {signature.split(':', 1)[0]}")
 
     return 0 if all_present else 1
+
+
+def _cmd_compliance_run(args: argparse.Namespace) -> int:
+    """Actually EXECUTE the compliance suites via pytest and record real pass/fail.
+
+    This is the honest counterpart to `compliance verify` (which only checks presence).
+    """
+    import subprocess
+    import sys
+
+    repo_root = _resolve_compliance_repo_root(args.repo_root)
+    generated_at = datetime.now(timezone.utc).isoformat()
+
+    # Collect the suite test paths from the manifest.
+    suite_paths: list[str] = []
+    for suite in COMPLIANCE_SUITE_MANIFEST:
+        for value in suite["paths"]:
+            p = repo_root / str(value)
+            if p.exists():
+                suite_paths.append(str(p))
+
+    if not suite_paths:
+        print("No compliance suite paths found to execute.")
+        return 1
+
+    print(f"Executing {len(suite_paths)} compliance suite path(s) via pytest...")
+    # Machine-readable pass/fail via pytest's return code + a JSON summary line count.
+    cmd = [sys.executable, "-m", "pytest", "-q", *suite_paths]
+    proc = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True)
+    tail = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    passed = proc.returncode == 0
+
+    result = {
+        "schema_version": "1.1",
+        "check_type": "executed",
+        "executed": True,
+        "generated_at": generated_at,
+        "repo_root": repo_root.as_posix(),
+        "pytest_returncode": proc.returncode,
+        "pytest_summary": tail,
+        "passed": passed,
+    }
+    result["signature"] = _sign_compliance_payload(result)
+    output = Path(args.output).expanduser().resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+    print(tail)
+    print(f"Executed attestation: {output.as_posix()}")
+    return 0 if passed else 1
 
 
 def _cmd_session_start(args: argparse.Namespace) -> int:
@@ -1250,7 +1309,7 @@ def build_parser() -> argparse.ArgumentParser:
     compliance_sub = compliance.add_subparsers(dest="compliance_command", required=True)
     compliance_verify = compliance_sub.add_parser(
         "verify",
-        help="Check mapped compliance suites and write attestation artifact.",
+        help="MANIFEST PRESENCE CHECK ONLY (does not run scenarios); writes attestation.",
     )
     compliance_verify.add_argument(
         "--repo-root",
@@ -1263,6 +1322,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for signed compliance attestation JSON.",
     )
     compliance_verify.set_defaults(func=_cmd_compliance_verify)
+
+    compliance_run = compliance_sub.add_parser(
+        "run",
+        help="EXECUTE the compliance suites via pytest and record real pass/fail.",
+    )
+    compliance_run.add_argument(
+        "--repo-root",
+        default=None,
+        help="Repository root used to resolve suite paths (defaults to current directory).",
+    )
+    compliance_run.add_argument(
+        "--output",
+        default="./compliance/clawzero_compliance_executed.json",
+        help="Output path for the executed compliance result JSON.",
+    )
+    compliance_run.set_defaults(func=_cmd_compliance_run)
 
     demo = subparsers.add_parser(
         "demo",
