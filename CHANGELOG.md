@@ -2,6 +2,18 @@
 
 All notable changes to ClawZero are documented in this file.
 
+## [0.4.1] - 2026-07-03
+
+### Added
+- Fail-closed on missing MVAR engine (default) with regression coverage
+- Real Ed25519 witness signature verification (forged/tampered witnesses rejected)
+- `compliance run` (executes suites) vs `compliance verify` (presence check) split
+- Public/private boundary CI gate
+
+### Changed
+- Re-baselined 3 policy tests to mvar 1.5.x advanced-risk behavior (prod_locked is
+  fail-closed without caller risk context; untrusted input may not reach loopback)
+
 ## [0.4.0] - 2026-04-16
 
 ### Added
