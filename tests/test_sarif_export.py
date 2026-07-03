@@ -15,7 +15,8 @@ from clawzero.runtime import MVARRuntime
 from clawzero.sarif import export_sarif, validate_sarif_report
 
 
-def _request(sink_type: str, target: str, source: str, taint_level: str) -> ActionRequest:
+def _request(sink_type: str, target: str, source: str, taint_level: str,
+             profile: str = "prod_locked") -> ActionRequest:
     return ActionRequest(
         request_id=str(uuid.uuid4()),
         framework="openclaw",
@@ -30,7 +31,7 @@ def _request(sink_type: str, target: str, source: str, taint_level: str) -> Acti
             "source_chain": [source, "tool_call"],
             "taint_markers": [] if taint_level == "trusted" else ["external_content"],
         },
-        policy_profile="prod_locked",
+        policy_profile=profile,
         metadata={
             "adapter": {
                 "name": "openclaw",
@@ -62,12 +63,33 @@ def test_sarif_export_validates(tmp_path: Path):
             taint_level="trusted",
         )
     )
+    # Re-baselined (Phase 4G): since mvar 1.5.x prod_locked yields no plain
+    # allows without risk context, so the "note"-level witness comes from a
+    # policy-decidable allow in dev_balanced. Each runtime restarts the witness
+    # file counter, so the allow witness is generated in its own directory and
+    # copied in under a non-colliding name.
+    allow_dir = tmp_path / "allow_witnesses"
+    allow_dir.mkdir(parents=True, exist_ok=True)
+    allow_runtime = MVARRuntime(profile="dev_balanced", witness_dir=allow_dir)
+    allow_runtime.evaluate(
+        _request(
+            sink_type="filesystem.read",
+            target="/workspace/project/quarterly_report.md",
+            source="user_request",
+            taint_level="trusted",
+            profile="dev_balanced",
+        )
+    )
+    allow_witness = next(allow_dir.glob("witness_*.json"))
+    (witness_dir / "witness_allow_001.json").write_text(
+        allow_witness.read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     output = tmp_path / "results.sarif"
     result = export_sarif(input_dir=witness_dir, output_file=output)
 
-    assert result.witness_count == 2
-    assert result.result_count == 2
+    assert result.witness_count == 3
+    assert result.result_count == 3
     assert output.exists()
 
     payload = json.loads(output.read_text(encoding="utf-8"))
@@ -75,6 +97,6 @@ def test_sarif_export_validates(tmp_path: Path):
     assert validate_sarif_report(payload) == []
 
     levels = [item["level"] for item in payload["runs"][0]["results"]]
-    assert "error" in levels
-    assert "note" in levels
+    assert "error" in levels     # blocked hostile shell
+    assert "note" in levels      # allowed trusted read
 

@@ -29,6 +29,30 @@ def test_langchain_tool_blocks_shell_exec():
 
 
 def test_langchain_tool_allows_safe_read():
+    # Re-baselined (Phase 4G) from prod_locked to dev_balanced: since mvar 1.5.x
+    # the prod_locked advanced-risk gate requires caller-supplied risk/task
+    # context (or step-up approval) for ANY action — by design, not drift. The
+    # adapter behavior under test (safe trusted reads pass through) is exercised
+    # where allows are policy-decidable.
+    def read_file(path: str) -> str:
+        return f"read:{path}"
+
+    safe_tool = protect_langchain_tool(
+        read_file,
+        sink="filesystem.read",
+        profile="dev_balanced",
+        source="user_request",
+        taint_level="trusted",
+    )
+
+    result = safe_tool("/workspace/project/quarterly_report.md")
+    assert result == "read:/workspace/project/quarterly_report.md"
+
+
+def test_langchain_tool_prod_locked_requires_risk_context():
+    """prod_locked posture since mvar 1.5.x: without risk context, even a
+    trusted read is refused rather than silently allowed (fail-closed)."""
+
     def read_file(path: str) -> str:
         return f"read:{path}"
 
@@ -40,8 +64,8 @@ def test_langchain_tool_allows_safe_read():
         taint_level="trusted",
     )
 
-    result = safe_tool("/workspace/project/quarterly_report.md")
-    assert result == "read:/workspace/project/quarterly_report.md"
+    with pytest.raises(ExecutionBlocked):
+        safe_tool("/workspace/project/quarterly_report.md")
 
 
 def test_langchain_chain_taint_propagates():

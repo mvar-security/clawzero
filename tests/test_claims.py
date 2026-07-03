@@ -129,8 +129,16 @@ def test_benign_request_allowed(tmp_path: Path):
     assert dec.decision == "allow"
 
 
-def test_localhost_allowed_prod_locked(tmp_path: Path):
-    """Allowlist match overrides sink criticality. untrusted provenance does not universally block."""
+def test_localhost_blocked_prod_locked(tmp_path: Path):
+    """Re-baselined (Phase 4G): untrusted provenance may NOT reach loopback in prod_locked.
+
+    Pre-1.5.x this expected `allow` ("allowlist match overrides sink criticality").
+    Two deliberate changes superseded that: SSRF containment treats loopback and
+    private-range egress as sensitive, and the mvar 1.5.x advanced-risk gate
+    requires risk confidence that injection-marked untrusted requests cannot
+    reach. Tainted input driving requests at internal services is exactly the
+    SSRF shape the engine should refuse.
+    """
     rt = _runtime(tmp_path, "prod_locked")
     req = _request(
         sink_type="http.request",
@@ -140,7 +148,8 @@ def test_localhost_allowed_prod_locked(tmp_path: Path):
         taint_markers=["prompt_injection", "external_content"],
     )
     dec = rt.evaluate(req)
-    assert dec.decision == "allow"
+    assert dec.decision == "block"
+    assert dec.reason_code == "RISK_CONFIDENCE_BELOW_THRESHOLD"
 
 
 # Witness schema
