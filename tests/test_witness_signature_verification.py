@@ -11,8 +11,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from clawzero.contracts import ActionRequest
 from clawzero.runtime import MVARRuntime
 from clawzero.witnesses.verify import verify_witness_object

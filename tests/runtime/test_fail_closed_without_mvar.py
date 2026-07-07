@@ -8,8 +8,6 @@ opt-out paths.
 Regression guard for Phase 2 finding CZ-2 (silent fail-open to embedded engine).
 """
 
-import importlib
-
 import pytest
 
 from clawzero.exceptions import MVARUnavailableError
