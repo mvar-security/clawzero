@@ -100,3 +100,14 @@ python_version = "3.10"
 warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
+
+# The MVAR engine is an external dependency; type-checking clawzero must not
+# analyze its internals (or their transitive stubs — numpy >= 2.5 ships PEP 695
+# `type` statements that are a syntax error under the 3.10 checking target).
+[[tool.mypy.overrides]]
+module = ["mvar", "mvar.*", "mvar_core", "mvar_core.*", "mvar_adapters", "mvar_adapters.*", "numpy", "numpy.*"]
+follow_imports = "skip"
+# Required for the skip to reach numpy: per-module follow_imports does not
+# apply to stub (.pyi) packages without this flag.
+follow_imports_for_stubs = true
+ignore_errors = true
