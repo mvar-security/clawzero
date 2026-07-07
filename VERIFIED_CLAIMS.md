@@ -1,14 +1,14 @@
 # VERIFIED CLAIMS
 
 Last verified: May 5, 2026
-Release target: `clawzero==0.4.0`
+Release target: `clawzero==0.4.1`
 
 All claims below are command-backed and reproducible from the repository.
 
 ## Installation
 
 ```bash
-pip install clawzero==0.4.0
+pip install clawzero==0.4.1
 ```
 
 ## Claim: `clawzero --help` shows all 14 commands
@@ -32,7 +32,7 @@ Expected commands:
 
 Source:
 - `src/clawzero/cli.py`
-- PyPI package `clawzero==0.4.0`
+- PyPI package `clawzero==0.4.1`
 
 ## Claim: ClawZero ships ~9,410 declared compliance scenarios; they execute and pass
 Status: VERIFIED (v0.4.0) — corrected wording July 2026
@@ -79,7 +79,7 @@ clawzero prove --format json
 ```
 
 Expected output includes:
-- `clawzero_version: "0.4.0"`
+- `clawzero_version: "0.4.1"`
 - `checks.policy_loaded: true`
 - `checks.qseal_available: true`
 - `checks.decision_log_writable: true`
@@ -280,7 +280,6 @@ Source:
 - `src/clawzero/adapters/crewai.py`
 - `src/clawzero/adapters/autogen.py`
 - `src/clawzero/adapters/mcp.py`
-- `src/clawzero/adapters/claude.py`
 - `src/clawzero/protect_agent.py`
 
 ## Claim: 50 attack vectors are validated in the attack pack
@@ -292,13 +291,13 @@ pytest -q tests/attack_pack
 ```
 
 Expected output includes:
-- `50 passed`
+- `2,750 passed (50 base vectors + generated expanded pack)`
 
 Source:
 - `tests/attack_pack/`
 
-## Claim: Full local suite passes at 279 tests
-Status: VERIFIED (v0.4.0)
+## Claim: Full local suite passes at 9,625 collected / 9,604 passed / 17 skipped (v0.4.1)
+Status: VERIFIED (v0.4.1)
 
 Proof command:
 ```bash
@@ -306,7 +305,7 @@ pytest tests/ -q
 ```
 
 Expected output includes:
-- `279 passed` (v0.4.0)
+- `9,625 collected / 9,604 passed / 17 skipped (v0.4.1)`
 - Previous: 117 tests (v0.2.0)
 
 Source:

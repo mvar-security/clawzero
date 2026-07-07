@@ -45,7 +45,7 @@ ClawZero enforces policy between model output and tool execution.
 **Execution boundary for OpenClaw agents. Powered by MVAR.**
 
 ```bash
-pip install clawzero==0.4.0
+pip install clawzero==0.4.1
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -87,7 +87,7 @@ pip install mvar-security
 ## 30-Second Quickstart
 
 ```bash
-pip install clawzero==0.4.0
+pip install clawzero==0.4.1
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -95,7 +95,7 @@ clawzero demo openclaw --mode compare --scenario shell
 Expected output:
 
 ```text
-Runtime......... OK (mvar-security 1.4.3)
+Runtime......... OK (mvar-security 1.5.4)
 Witness......... OK (chain valid)
 Demo............ OK (attack blocked)
 Status: SECURE
@@ -321,7 +321,7 @@ The attack demonstrations show how enforcement works; they are not tools for per
   "target": "bash",
   "decision": "block",
   "reason_code": "UNTRUSTED_TO_CRITICAL_SINK",
-  "policy_id": "mvar-security.v1.4.3",
+  "policy_id": "mvar-security.v1.5.4",
   "engine": "mvar-security",
   "provenance": {
     "source": "external_document",
