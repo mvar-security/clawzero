@@ -17,6 +17,10 @@ jobs:
         engine-mode: ["mvar", "embedded"]
     env:
       CLAWZERO_ENGINE_MODE: ${{ matrix.engine-mode }}
+      # The embedded leg exists to test the embedded engine's parity, so it uses
+      # the documented explicit opt-in; without it the 0.4.1 fail-closed engine
+      # requirement (correctly) refuses to run on the weaker engine.
+      CLAWZERO_ALLOW_EMBEDDED: ${{ matrix.engine-mode == 'embedded' && '1' || '' }}
 
     steps:
       - name: Checkout

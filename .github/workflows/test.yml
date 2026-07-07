@@ -52,7 +52,7 @@ jobs:
           python3 -m venv /tmp/gate_test
           source /tmp/gate_test/bin/activate
           python -m pip install --upgrade pip
-          pip install clawzero==0.2.0
+          pip install clawzero==0.4.2
 
           clawzero doctor openclaw | tee /tmp/doctor.out
           grep -q "Status: SECURE" /tmp/doctor.out
@@ -80,13 +80,13 @@ jobs:
           python3 -m venv /tmp/download_smoke
           source /tmp/download_smoke/bin/activate
           python -m pip install --upgrade pip
-          pip install --no-cache-dir clawzero==0.2.0
+          pip install --no-cache-dir clawzero==0.4.2
 
           clawzero doctor openclaw | tee /tmp/doctor.out
           grep -q "Status: SECURE" /tmp/doctor.out
           grep -q "Witness signer:  Ed25519 (QSEAL) ✓" /tmp/doctor.out
-          grep -q "Ledger signer:   HMAC fallback" /tmp/doctor.out
+          grep -q "Ledger signer:   Ed25519 (QSEAL) ✓" /tmp/doctor.out
 
           clawzero demo openclaw --mode compare --scenario shell | tee /tmp/demo.out
           grep -q "MVAR-Protected      →  BLOCKED ✓" /tmp/demo.out
-          grep -q "Policy:  mvar-security.v1.4.3" /tmp/demo.out
+          grep -q "Policy:  mvar-security.v1.6.0" /tmp/demo.out
