@@ -45,7 +45,7 @@ ClawZero enforces policy between model output and tool execution.
 **Execution boundary for OpenClaw agents. Powered by MVAR.**
 
 ```bash
-pip install clawzero==0.4.1
+pip install --upgrade clawzero
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -87,7 +87,7 @@ pip install mvar-security
 ## 30-Second Quickstart
 
 ```bash
-pip install clawzero==0.4.1
+pip install --upgrade clawzero
 clawzero doctor openclaw
 clawzero demo openclaw --mode compare --scenario shell
 ```
@@ -149,7 +149,7 @@ Based on public positioning:
 - VellaVeto: MCP-specific firewall with formal-verification focus, not OpenClaw-native.
 - NemoClaw: NVIDIA managed platform, currently alpha/waitlist.
 - Sage: Detection-and-response model that alerts after attempts.
-- ClawZero: zero-config runtime enforcement, IFC taint-aware policy, production-ready today.
+- ClawZero: zero-config runtime enforcement, IFC taint-aware policy, deterministic block-at-execution (not detect-after).
 
 Decision shortcuts:
 
