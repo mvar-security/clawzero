@@ -24,7 +24,7 @@ Expected commands:
 - `demo` — Run interactive demonstration
 - `init` — Initialize QSEAL signing environment
 - `keys` — Manage Ed25519 signing keys (v0.4.0+)
-- `prove` — Generate cryptographic proof of deterministic execution (v0.3.0+)
+- `prove` — Run install-to-proof enforcement checks and emit signed witness records (v0.3.0+)
 - `session` — Session tracking and cross-session taint detection (v0.3.0+)
 - `verify` — Verify QSEAL signature on decision record
 - `version` — Show version information
@@ -70,7 +70,7 @@ Source:
 - `tests/compliance/`, `tests/attack_pack/`, `tests/` (the actual suites)
 - Declared scenario count: 9,410 (manifest sum); executed: via `compliance run` / pytest
 
-## Claim: `clawzero prove` generates cryptographic execution proof
+## Claim: `clawzero prove` runs install-to-proof enforcement checks and emits signed witness records
 Status: VERIFIED (v0.3.0+)
 
 Proof command:
@@ -340,7 +340,7 @@ Source:
 - PyPI release: May 2, 2026
 
 ### v0.3.0
-- Added `prove` command (cryptographic execution proof)
+- Added `prove` command (install-to-proof enforcement checks, signed witness records)
 - Added `wrap` command (live enforcement feed)
 - Added `session` command (cross-session taint tracking)
 - Session isolation and chain detection
