@@ -1,38 +1,45 @@
 # VERIFIED CLAIMS
 
 Last verified: May 5, 2026
-Release target: `clawzero==0.4.1`
+Current release: `clawzero` 0.4.2 (PyPI)
 
-All claims below are command-backed and reproducible from the repository.
+Each claim below cites its backing command and source/test locations. Verify by running the cited command and reading the cited file.
 
 ## Installation
 
 ```bash
-pip install clawzero==0.4.1
+pip install --upgrade clawzero
 ```
 
-## Claim: `clawzero --help` shows all 14 commands
-Status: VERIFIED (v0.4.0)
+## Claim: `clawzero --help` shows all 14 top-level commands
+Status: VERIFIED (v0.4.2) — command list corrected against cli.py subparsers (July 2026)
 
 Proof command:
 ```bash
 clawzero --help
 ```
 
-Expected commands:
-- `compliance` — Verify compliance test coverage (v0.4.0+)
-- `demo` — Run interactive demonstration
-- `init` — Initialize QSEAL signing environment
-- `keys` — Manage Ed25519 signing keys (v0.4.0+)
-- `prove` — Run install-to-proof enforcement checks and emit signed witness records (v0.3.0+)
-- `session` — Session tracking and cross-session taint detection (v0.3.0+)
-- `verify` — Verify QSEAL signature on decision record
-- `version` — Show version information
-- `wrap` — Wrap command execution with live enforcement feed (v0.3.0+)
+Expected commands (the 14 top-level subparsers registered in `cli.py`):
+- `prove` — Run install-to-proof checks in one command.
+- `wrap` — Wrap a command with process/tool-boundary enforcement (not syscall-level interception).
+- `session` — Session lifecycle and reporting commands.
+- `keys` — Inspect local witness signing key material.
+- `compliance` — Verify test-suite compliance scaffolding and emit signed attestation JSON.
+- `demo` — Run enforcement proof demos (same input, different boundary).
+- `witness` — Inspect and validate signed witness artifacts from enforcement decisions.
+- `audit` — Audit deterministic policy enforcement for a specific sink request.
+- `attack` — Replay known attack scenarios to prove sink-boundary enforcement.
+- `attack-test` — Run compact deterministic attack suite and emit witness artifacts.
+- `replay` — Replay an entire witness session directory in timeline form.
+- `benchmark` — Run implemented benchmark corpus and print measured outcomes.
+- `doctor` — Run OpenClaw environment and enforcement health checks.
+- `report` — Export enforcement artifacts into security report formats.
+
+(The count of 14 is correct, but the earlier list was not: there is no top-level `init`, `verify`, or `version` command — those were listed in error and the real commands above were omitted. `--version` is a flag; signature verification lives under `witness`.)
 
 Source:
 - `src/clawzero/cli.py`
-- PyPI package `clawzero==0.4.1`
+- PyPI package `clawzero` (current: 0.4.2)
 
 ## Claim: ClawZero ships ~9,410 declared compliance scenarios; they execute and pass
 Status: VERIFIED (v0.4.0) — corrected wording July 2026
@@ -75,20 +82,20 @@ Status: VERIFIED (v0.3.0+)
 
 Proof command:
 ```bash
-clawzero prove --format json
+clawzero prove --output-dir ./prove_witnesses
 ```
+(optional: `--require-mvar` to fail fast unless the mvar-security runtime is healthy; `--sink-type`, `--target`, `--command` override the simulated attack.)
 
-Expected output includes:
-- `clawzero_version: "0.4.1"`
-- `checks.policy_loaded: true`
-- `checks.qseal_available: true`
-- `checks.decision_log_writable: true`
-- `policy_hash: sha256:...`
-- `session_id: session_YYYYMMDD_HHMMSS`
+Expected output (three-step console report):
+- `[1/3] Runtime check....... OK (<detail>)`
+- `[2/3] Attack simulation... BLOCKED ✓ (<sink_type>)`
+- `[3/3] Witness generated... YES (<signer>)`
+- `Status: SECURE`
+- `Witness: <path to the signed witness artifact written under --output-dir>`
 
 Source:
-- `src/clawzero/prove.py`
-- `tests/test_prove_cli.py`
+- `src/clawzero/cli.py` (`_cmd_prove`, ~L1123)
+- `tests/test_doctor_cli.py` (`test_prove_command_secure`, `test_prove_command_require_mvar_fails_when_runtime_warn`)
 
 ## Claim: `clawzero keys show` displays Ed25519 signing key status
 Status: VERIFIED (v0.4.0)
@@ -98,35 +105,36 @@ Proof command:
 clawzero keys show
 ```
 
-Expected output includes:
-- `Public Key Fingerprint (SHA-256): <64-char hex>`
-- `Key Status: ✅ ACTIVE`
-- `Algorithm: Ed25519 (256-bit)`
-- `Usage: Decision record signing: ENABLED`
+Expected output (when a signing key exists):
+- `ClawZero Signing Key`
+- `  Algorithm:   Ed25519`
+- `  Public key:  <base64>`
+- `  Fingerprint: <16-hex>` (first 16 hex chars of SHA-256 over the public key)
+- `  Key file:    <path>`
+- (if no key yet: `Status: missing` with guidance to run a witness-emitting command)
 
 Source:
-- `src/clawzero/keys.py`
-- `tests/test_keys_cli.py`
+- `src/clawzero/cli.py` (`_cmd_keys_show`, ~L755) + `src/clawzero/witnesses/generator.py` (Ed25519 key handling)
+- No dedicated `keys show` CLI test as of v0.4.2; the underlying Ed25519 signing/key path is exercised by `tests/test_witness_signing.py`, `tests/test_witness_signature_verification.py`, and `tests/test_witness_trust.py`
 
 ## Claim: `clawzero wrap` provides live enforcement feed
 Status: VERIFIED (v0.3.0+)
 
 Proof command:
 ```bash
-clawzero wrap -- python examples/attack_demo.py
+clawzero wrap -- python src/clawzero/examples/attack_demo.py
 ```
 
 Expected output includes:
-- Live feed showing:
-  - Policy loaded with rule count
-  - QSEAL initialized with Ed25519 signing
-  - Real-time BLOCKED/ALLOWED decisions with signatures
-  - Execution summary with total decisions, allowed count, blocked count
+- `[ClawZero] Session <session_id> active — <profile>`
+- A note that interception is at the process/tool-call boundary (not syscall-level)
+- Per-call decision lines: `<timestamp>  ALLOW|BLOCK  <sink_type>  <command>` (blocked calls add `Reason:` and `Witness:`)
+- A `Session complete` summary: `Calls`, `Blocked`, `Score` (escalation), `Witnesses` (chain length), and `Report:` path
 
 Source:
-- `src/clawzero/wrap.py`
-- `examples/attack_demo.py`
-- `tests/test_wrap_cli.py`
+- `src/clawzero/cli.py` (`_cmd_wrap`, ~L1026)
+- `src/clawzero/examples/attack_demo.py`
+- `tests/test_cli_session_wrap.py`
 
 ## Claim: `clawzero session` tracks cross-session taint continuity
 Status: VERIFIED (v0.3.0+)
@@ -145,7 +153,7 @@ Expected functionality:
 Source:
 - `src/clawzero/runtime/session.py`
 - `src/clawzero/runtime/chain_patterns.py`
-- `tests/test_session_tracking.py`
+- `tests/test_session_runtime.py`, `tests/test_cli_session_wrap.py`
 
 ## Claim: `clawzero doctor openclaw` returns secure runtime posture
 Status: VERIFIED
@@ -257,15 +265,15 @@ Source:
 - `src/clawzero/witnesses/verify.py`
 - `tests/test_witness_trust.py`
 
-## Claim: 7 framework adapter surfaces are shipped
-Status: VERIFIED
+## Claim: 6 framework adapter surfaces are shipped
+Status: VERIFIED (v0.4.2) — count corrected against `clawzero.__all__` (July 2026)
 
 Proof command:
 ```bash
 python - <<'PY'
 from clawzero import (
     OpenClawAdapter, LangChainAdapter, CrewAIAdapter,
-    AutoGenAdapter, MCPAdapter, ClaudeAdapter, protect_agent
+    AutoGenAdapter, MCPAdapter, protect_agent
 )
 print("OK")
 PY
@@ -274,7 +282,10 @@ PY
 Expected output:
 - `OK`
 
+The five `*Adapter` classes plus `protect_agent` = 6 surfaces, all exported from `clawzero.__all__`. (The earlier "7 surfaces / `ClaudeAdapter`" import was incorrect — no `ClaudeAdapter` is exported, so that import raised ImportError.)
+
 Source:
+- `src/clawzero/__init__.py` (`__all__` — the authoritative export list)
 - `src/clawzero/adapters/openclaw/__init__.py`
 - `src/clawzero/adapters/langchain.py`
 - `src/clawzero/adapters/crewai.py`
@@ -296,17 +307,18 @@ Expected output includes:
 Source:
 - `tests/attack_pack/`
 
-## Claim: Full local suite passes at 9,625 collected / 9,604 passed / 17 skipped (v0.4.1)
-Status: VERIFIED (v0.4.1)
+## Claim: Full local suite runs green except tracked pre-existing failures
+Status: run it to confirm — figures below are from a recorded run, not re-verified in this environment
 
 Proof command:
 ```bash
-pytest tests/ -q
+PYTHONPATH=src:<mvar> python -m pytest tests/ -q
 ```
 
-Expected output includes:
-- `9,625 collected / 9,604 passed / 17 skipped (v0.4.1)`
+Recorded run (v0.4.x, see the compliance-execution claim above):
+- `9,604 passed / 17 skipped / 3 pre-existing policy-drift failures (tracked)`
 - Previous: 117 tests (v0.2.0)
+- The "9,625 collected / clean pass" phrasing was inconsistent with the tracked-failures line above; corrected here to the self-consistent figure. Re-run the command to confirm the current count.
 
 Source:
 - `tests/`
