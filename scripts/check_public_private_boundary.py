@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public/private boundary gate (EVAL/04_TARGET_ARCHITECTURE.md §6, hard rule 3).
 
-Fails (exit 1) if any PUBLIC package's source or docs reference MIRRA EOS private-brain
+Fails (exit 1) if any PUBLIC package's source or docs reference MIRRA EOS private-brain  (boundary-policy-ok: the gate must name what it bans)
 internals. Public packages (MVAR, ClawZero, ClawSeal) must depend only on the generic
 core contract — never on private identity/emotion/cognition concepts. The private brain
 implements the CapabilityProvider interface and is injected at runtime.

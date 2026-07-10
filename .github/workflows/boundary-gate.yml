@@ -1,6 +1,6 @@
 name: Public/Private Boundary Gate
 
-# Fails the build if MIRRA EOS private-brain concepts leak into this PUBLIC package.
+# Fails the build if private-brain concepts leak into this PUBLIC package.
 # See EVAL/04_TARGET_ARCHITECTURE.md §6 and hard rule 3.
 
 on:
